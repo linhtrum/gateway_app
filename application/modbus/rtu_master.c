@@ -10,17 +10,11 @@
 #include "db.h"
 
 #define DBG_TAG "RTU_MASTER"
-#define DBG_LVL LOG_INFO
+#define DBG_LVL LOG_ERROR
 #include "dbg.h"
 
 #define DEFAULT_PORT "/dev/ttymxc0"
 #define DEFAULT_BAUD 115200
-
-// Error codes
-#define RTU_MASTER_OK           0
-#define RTU_MASTER_ERROR       -1
-#define RTU_MASTER_TIMEOUT    -2
-#define RTU_MASTER_INVALID    -3
 
 // Function declarations
 static void free_node(node_t *node);
@@ -86,7 +80,12 @@ static int convert_node_value(node_t *node, uint16_t *raw_data) {
     
     switch (node->data_type) {
         case DATA_TYPE_BOOLEAN:
-            node->value.bool_val = (raw_data[0] != 0);
+            if (node->function == 1 || node->function == 2) {
+                // For coils and discrete inputs, each bit is expanded to a uint8_t
+                node->value.bool_val = (((uint8_t *)raw_data)[0] != 0);
+            } else {
+                node->value.bool_val = (raw_data[0] != 0);
+            }
             break;
 
         case DATA_TYPE_INT8:
@@ -312,7 +311,7 @@ static void create_node_groups(device_t *device) {
 static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_t *node) {
     if (!ctx || fd < 0 || !device || !node) return RTU_MASTER_INVALID;
 
-    uint16_t data[4] = {0};  // Max 4 registers for any data type
+    uint16_t data[4] = {0};  // Buffer for all data types
     int rc;
     int reg_count = get_register_count(node->data_type);
     
@@ -349,7 +348,7 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     // Read response with node-specific timeout
-    int read_len = serial_read(fd, ctx->read_buf, AGILE_MODBUS_MAX_ADU_LENGTH, node->timeout);
+    int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, node->timeout);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for node %s (timeout: %dms)", 
                  node->name, node->timeout);
@@ -360,10 +359,10 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
         // Process response based on function code
         switch(node->function) {
             case 1: // Read coils
-                rc = agile_modbus_deserialize_read_bits(ctx, read_len, data);
+                rc = agile_modbus_deserialize_read_bits(ctx, read_len, (uint8_t *)data);
                 break;
             case 2: // Read discrete inputs
-                rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, data);
+                rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, (uint8_t *)data);
                 break;
             case 3: // Read holding registers
                 rc = agile_modbus_deserialize_read_registers(ctx, read_len, data);
@@ -465,7 +464,7 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Read response
-    int read_len = serial_read(fd, ctx->read_buf, AGILE_MODBUS_MAX_ADU_LENGTH, 
+    int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, 
                              AGILE_MODBUS_RTU_TIMEOUT);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
@@ -477,20 +476,16 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
         // Process response based on function code
         switch(group->function) {
             case 1: // Read coils
-                rc = agile_modbus_deserialize_read_bits(ctx, read_len, 
-                                                      group->data_buffer);
+                rc = agile_modbus_deserialize_read_bits(ctx, read_len, (uint8_t *)group->data_buffer);
                 break;
             case 2: // Read discrete inputs
-                rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, 
-                                                            group->data_buffer);
+                rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, (uint8_t *)group->data_buffer);
                 break;
             case 3: // Read holding registers
-                rc = agile_modbus_deserialize_read_registers(ctx, read_len, 
-                                                           group->data_buffer);
+                rc = agile_modbus_deserialize_read_registers(ctx, read_len, group->data_buffer);
                 break;
             case 4: // Read input registers
-                rc = agile_modbus_deserialize_read_input_registers(ctx, read_len, 
-                                                                 group->data_buffer);
+                rc = agile_modbus_deserialize_read_input_registers(ctx, read_len, group->data_buffer);
                 break;
         }
 
@@ -503,8 +498,18 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
         // Update values for all nodes in the group
         node_t *node = group->nodes;
         while (node && node->function == group->function) {
+            // For coils and discrete inputs, each bit is returned as a byte
+            uint16_t *data_ptr;
+            if (node->function == 1 || node->function == 2) {
+                // For bit functions, offset is in bits but data is in bytes
+                data_ptr = (uint16_t *)&((uint8_t *)group->data_buffer)[node->offset];
+            } else {
+                // For register functions, offset is in registers
+                data_ptr = &group->data_buffer[node->offset];
+            }
+
             // Convert and store the value using the node's offset
-            int convert_result = convert_node_value(node, &group->data_buffer[node->offset]);
+            int convert_result = convert_node_value(node, data_ptr);
             if (convert_result != RTU_MASTER_OK) {
                 DBG_ERROR("Failed to convert value for node %s in group", node->name);
                 return convert_result;
@@ -565,8 +570,8 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
 device_t* get_device_config(void) {
     device_t *head = NULL;
     device_t *current = NULL;
-    char json_str[16*4096] = {0}; // Adjust size as needed
-    
+    char json_str[32*4096] = {0}; // Adjust size as needed
+
     // Read JSON string from database
     int read_len = db_read("device_config", json_str, sizeof(json_str));
     if (read_len <= 0) {
@@ -615,6 +620,10 @@ device_t* get_device_config(void) {
         }
         if (nodes) {
             new_device->nodes = parse_nodes(nodes);
+            // Create node groups if group mode is enabled
+            if (new_device->group_mode) {
+                create_node_groups(new_device);
+            }
         }
 
         if (!head) {
@@ -627,6 +636,24 @@ device_t* get_device_config(void) {
     }
 
     cJSON_Delete(root);
+    
+    // Log the parsed configuration
+    device_t *device = head;
+    while (device) {
+        DBG_INFO("Device: %s (addr: %d, interval: %dms, group mode: %d)", 
+                 device->name, device->device_addr, 
+                 device->polling_interval, device->group_mode);
+        
+        node_t *node = device->nodes;
+        while (node) {
+            DBG_INFO("  Node: %s (addr: %d, func: %d, type: %d, timeout: %dms)",
+                     node->name, node->address, node->function,
+                     node->data_type, node->timeout);
+            node = node->next;
+        }
+        device = device->next;
+    }
+    
     return head;
 }
 
@@ -673,11 +700,6 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
         agile_modbus_set_slave(ctx, current_device->device_addr);
         
         if (current_device->group_mode) {
-            // Create node groups if not already created
-            if (!current_device->groups) {
-                create_node_groups(current_device);
-            }
-            
             // Poll each group
             node_group_t *current_group = current_device->groups;
             while (current_group) {
@@ -710,7 +732,6 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
 }
 
 static void *rtu_master_thread(void *arg) {
-    device_t *config = (device_t *)arg;
     int fd;
     uint8_t master_send_buf[AGILE_MODBUS_MAX_ADU_LENGTH];
     uint8_t master_recv_buf[AGILE_MODBUS_MAX_ADU_LENGTH];
@@ -721,16 +742,17 @@ static void *rtu_master_thread(void *arg) {
     agile_modbus_rtu_init(&ctx_rtu, master_send_buf, sizeof(master_send_buf),
                          master_recv_buf, sizeof(master_recv_buf));
     
+    device_t *config = get_device_config();
     if (!config) {
         DBG_ERROR("Invalid configuration for RTU master thread");
-        return NULL;
+        goto exit;
     }
 
     // Initialize serial port
     fd = rtu_master_init(DEFAULT_PORT, DEFAULT_BAUD);
     if (fd < 0) {
         DBG_ERROR("Failed to initialize RTU master");
-        return NULL;
+        goto exit;
     }
 
     DBG_INFO("RTU master polling thread started");
@@ -739,6 +761,15 @@ static void *rtu_master_thread(void *arg) {
     while (1) {
         // Poll all devices (each device handles its own polling interval)
         rtu_master_poll(ctx, fd, config);
+    }
+
+    exit:
+    if(config) {
+        free_device_config(config);
+    }
+
+    if(fd >= 0) {
+        serial_close(fd);
     }
 
     return NULL;
@@ -750,9 +781,8 @@ void start_rtu_master(void) {
     
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-    device_t *config = get_device_config();
-    int ret = pthread_create(&thread, &attr, rtu_master_thread, config);
+    
+    int ret = pthread_create(&thread, &attr, rtu_master_thread, NULL);
     if (ret != 0) {
         DBG_ERROR("Failed to create RTU master thread: %s", strerror(ret));
     }

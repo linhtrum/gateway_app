@@ -353,6 +353,17 @@ function Devices() {
       case "t":
         error = validateTimeout(value);
         break;
+      case "f":
+        // When function code changes to 1 or 2, force data type to 1 (Boolean)
+        if (value === "1" || value === "2") {
+          setNewNode((prev) => ({
+            ...prev,
+            [name]: parseInt(value),
+            dt: 1, // Force Boolean data type
+          }));
+          return;
+        }
+        break;
       default:
         break;
     }
@@ -601,6 +612,20 @@ function Devices() {
     if (name === "n" && value.length > CONFIG.MAX_NAME_LENGTH) {
       alert(`Node name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`);
       return;
+    }
+
+    // Handle function code changes
+    if (name === "f") {
+      const numValue = parseInt(value) || 1;
+      // When function code changes to 1 or 2, force data type to 1 (Boolean)
+      if (numValue === 1 || numValue === 2) {
+        setEditingNode((prev) => ({
+          ...prev,
+          [name]: numValue,
+          dt: 1, // Force Boolean data type
+        }));
+        return;
+      }
     }
 
     // Handle all numeric fields
@@ -1142,6 +1167,7 @@ function Devices() {
                             value=${newNode.dt}
                             onChange=${handleNodeInputChange}
                             class="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            disabled=${newNode.f === 1 || newNode.f === 2}
                           >
                             ${CONFIG.DATA_TYPES.map(
                               ([value, label]) => html`
@@ -1266,6 +1292,8 @@ function Devices() {
                                         value=${editingNode.dt}
                                         onChange=${handleEditNodeInputChange}
                                         class="w-full px-2 py-1 border border-gray-300 rounded"
+                                        disabled=${editingNode.f === 1 ||
+                                        editingNode.f === 2}
                                       >
                                         ${CONFIG.DATA_TYPES.map(
                                           ([value, label]) => html`

@@ -11,7 +11,7 @@
 #include <pthread.h>
 
 #define DBG_TAG "SYSTEM"
-#define DBG_LVL LOG_INFO
+#define DBG_LVL LOG_ERROR
 #include "dbg.h"
 
 #define UDP_PORT 12345

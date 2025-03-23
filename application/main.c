@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 
     // Initialize logging system
     log_buffer_init();
-    log_output_init(LOG_OUTPUT_WEBSOCKET);  // Enable stdout (default) and serial output
+    // log_output_init(LOG_OUTPUT_WEBSOCKET);  // Enable stdout (default) and serial output
 
     // Setup signal handling
     signal(SIGTERM, signal_handler);

@@ -16,8 +16,11 @@
 #include "../log/log_buffer.h"
 #include "../log/log_output.h"
 
+#define DEFAULT_HTTP_PORT 8000
+#define DEFAULT_HTTP_URL "http://0.0.0.0"
+
 #define DBG_TAG "WEB"
-#define DBG_LVL LOG_INFO
+#define DBG_LVL LOG_ERROR
 #include "dbg.h"
 
 struct user {
@@ -863,15 +866,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     }
 }
 
-// void web_init(struct mg_mgr *mgr) {
-//     mg_http_listen(mgr, "http://0.0.0.0:8000", fn, NULL);
-// }
-
 static void *webserver_thread(void *arg) {
     struct mg_mgr mgr;
+    char listen_url[128];
+
     mg_mgr_init(&mgr);
-    mg_http_listen(&mgr, "http://0.0.0.0:8000", fn, NULL);
+    snprintf(listen_url, sizeof(listen_url), "%s:%d", DEFAULT_HTTP_URL, DEFAULT_HTTP_PORT);
+    mg_http_listen(&mgr, listen_url, fn, NULL);
     mg_wakeup_init(&mgr);
+    DBG_INFO("Web server starting on %s", listen_url);
+
     while(1) {
         mg_mgr_poll(&mgr, 500);
         usleep(20 * 1000);

@@ -6,10 +6,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include "agile_modbus.h"
+
 #define AGILE_MODBUS_MAX_ADU_LENGTH 256
 #define AGILE_MODBUS_RTU_TIMEOUT 1000
 #define AGLIE_MODBUS_POLLING_INTERVAL 1000
 #define AGILE_MODBUS_MAX_REGISTERS 125
+
+// Error codes
+#define RTU_MASTER_OK          0
+#define RTU_MASTER_ERROR      -1
+#define RTU_MASTER_TIMEOUT    -2
+#define RTU_MASTER_INVALID    -3
 
 // Data type enumeration
 typedef enum {
