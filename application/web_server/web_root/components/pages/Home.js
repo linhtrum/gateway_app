@@ -286,43 +286,47 @@ function Home() {
     return date.toLocaleString();
   };
 
-  const handleAddCard = (e) => {
-    e.preventDefault();
-
-    if (!newCardConfig.t.trim() || newCardConfig.t.length > 20) {
-      alert("Title is required and must not exceed 20 characters");
+  const handleAddCard = () => {
+    if (displayCards.length >= 200) {
+      alert("Maximum limit of 200 cards reached. Cannot add more cards.");
       return;
     }
-
-    if (!newCardConfig.di || !newCardConfig.ti || !newCardConfig.hi) {
-      alert("Please fill in all fields");
-      return;
-    }
-
-    const device = devices[parseInt(newCardConfig.di)];
-    const newCard = {
-      t: newCardConfig.t.trim(),
-      dn: device.n,
-      tn: {
-        n: device.ns[parseInt(newCardConfig.ti)].n,
-        a: device.ns[parseInt(newCardConfig.ti)].a,
-        f: device.ns[parseInt(newCardConfig.ti)].f,
-        dt: device.ns[parseInt(newCardConfig.ti)].dt,
-        t: device.ns[parseInt(newCardConfig.ti)].t,
-        v: device.ns[parseInt(newCardConfig.ti)].value,
+    setDisplayCards((prev) => [
+      ...prev,
+      {
+        t: "New Card",
+        dn: devices[parseInt(newCardConfig.di)].n,
+        tn: {
+          n: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
+            .n,
+          a: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
+            .a,
+          f: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
+            .f,
+          dt: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
+            .dt,
+          t: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
+            .t,
+          v: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
+            .value,
+        },
+        hn: {
+          n: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
+            .n,
+          a: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
+            .a,
+          f: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
+            .f,
+          dt: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
+            .dt,
+          t: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
+            .t,
+          v: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
+            .value,
+        },
+        lastUpdate: new Date(),
       },
-      hn: {
-        n: device.ns[parseInt(newCardConfig.hi)].n,
-        a: device.ns[parseInt(newCardConfig.hi)].a,
-        f: device.ns[parseInt(newCardConfig.hi)].f,
-        dt: device.ns[parseInt(newCardConfig.hi)].dt,
-        t: device.ns[parseInt(newCardConfig.hi)].t,
-        v: device.ns[parseInt(newCardConfig.hi)].value,
-      },
-      lastUpdate: new Date(),
-    };
-
-    setDisplayCards((prev) => [...prev, newCard]);
+    ]);
     setIsAddingCard(false);
     setNewCardConfig({
       t: "",
@@ -488,9 +492,19 @@ function Home() {
             </div>
           </div>
         </div>
-        <${Button} onClick=${() => setIsAddingCard(true)} icon="PlusIcon">
-          Add Display Card
-        <//>
+        <div class="flex items-center space-x-4">
+          <span class="text-sm text-gray-500">
+            Cards: ${displayCards.length}/200
+          </span>
+          <${Button}
+            onClick=${handleAddCard}
+            disabled=${displayCards.length >= 200}
+            variant="primary"
+            icon="PlusIcon"
+          >
+            Add Card
+          <//>
+        </div>
       </div>
 
       <!-- Search Box -->

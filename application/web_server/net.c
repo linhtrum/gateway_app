@@ -40,7 +40,7 @@ static const char *s_json_header =
 static char* generate_token(const char* username, const char* password) {
     // Allocate buffer for combined string (username + password + null terminator)
     size_t len = strlen(username) + strlen(password) + 1;
-    char* combined = (char*)malloc(len);
+    char* combined = (char*)calloc(1, len);
     if (!combined) {
         DBG_ERROR("Failed to allocate memory for token generation");
         return NULL;
@@ -58,7 +58,7 @@ static char* generate_token(const char* username, const char* password) {
     }
 
     // Convert hash to string token
-    char* token = (char*)malloc(17); // 16 chars + null terminator
+    char* token = (char*)calloc(1, 17); // 16 chars + null terminator
     if (!token) {
         free(combined);
         DBG_ERROR("Failed to allocate memory for token");
@@ -521,7 +521,7 @@ static char* read_network_config(void) {
     size_t buf_size = 16*4096;  // Initial buffer size
     
     // Allocate initial buffer
-    json_str = malloc(buf_size);
+    json_str = calloc(1, buf_size);
     if (!json_str) {
         DBG_ERROR("Failed to allocate memory for network config");
         return NULL;
@@ -561,7 +561,7 @@ static char* read_system_config(void) {
     size_t buf_size = 4096;  // Initial buffer size
     
     // Allocate initial buffer
-    json_str = malloc(buf_size);
+    json_str = calloc(1, buf_size);
     if (!json_str) {
         DBG_ERROR("Failed to allocate memory for system config");
         return NULL;
@@ -601,7 +601,7 @@ static char* read_device_config(void) {
     size_t buf_size = 16*4096;  // Initial buffer size
     
     // Allocate initial buffer
-    json_str = malloc(buf_size);
+    json_str = calloc(1, buf_size);
     if (!json_str) {
         DBG_ERROR("Failed to allocate memory for device config");
         return NULL;
@@ -641,7 +641,7 @@ static char* read_card_config(void) {
     size_t buf_size = 16*4096;  // Initial buffer size
     
     // Allocate initial buffer
-    json_str = malloc(buf_size);
+    json_str = calloc(1, buf_size);
     if (!json_str) {
         DBG_ERROR("Failed to allocate memory for card config");
         return NULL;
@@ -692,7 +692,7 @@ static void handle_network_get(struct mg_connection *c) {
 }
 
 static void handle_network_set(struct mg_connection *c, struct mg_http_message *hm) {
-    char *json_str = malloc(hm->body.len + 1);
+    char *json_str = calloc(1, hm->body.len + 1);
     if (!json_str) {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
         return;
@@ -711,7 +711,7 @@ static void handle_network_set(struct mg_connection *c, struct mg_http_message *
 }
 
 static void handle_system_set(struct mg_connection *c, struct mg_http_message *hm) {
-    char *json_str = malloc(hm->body.len + 1);
+    char *json_str = calloc(1, hm->body.len + 1);
     if (!json_str) {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
         return;
@@ -730,7 +730,7 @@ static void handle_system_set(struct mg_connection *c, struct mg_http_message *h
 }
 
 static void handle_devices_set(struct mg_connection *c, struct mg_http_message *hm) {
-    char *json_str = malloc(hm->body.len + 1);
+    char *json_str = calloc(1, hm->body.len + 1);
     if (!json_str) {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
         return;
@@ -749,7 +749,7 @@ static void handle_devices_set(struct mg_connection *c, struct mg_http_message *
 }
 
 static void handle_card_set(struct mg_connection *c, struct mg_http_message *hm) {
-    char *json_str = malloc(hm->body.len + 1);
+    char *json_str = calloc(1, hm->body.len + 1);
     if (!json_str) {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
         return;
