@@ -157,7 +157,16 @@ static void *log_thread_func(void* arg) {
 }
 
 void log_output_start(void) {
-    pthread_t tid;
-    pthread_create(&tid, NULL, log_thread_func, NULL);
-    pthread_detach(tid);
+    pthread_t thread;
+    pthread_attr_t attr;
+    
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    
+    int ret = pthread_create(&thread, &attr, log_thread_func, NULL);
+    if (ret != 0) {
+        DBG_ERROR("Failed to create log output thread: %s", strerror(ret));
+    }
+    
+    pthread_attr_destroy(&attr);
 }

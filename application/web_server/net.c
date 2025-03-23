@@ -881,8 +881,17 @@ static void *webserver_thread(void *arg) {
 }
 
 void web_init(void) {
-    pthread_t tid;
-    pthread_create(&tid, NULL, webserver_thread, NULL);
-    pthread_detach(tid);
+    pthread_t thread;
+    pthread_attr_t attr;
+    
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    
+    int ret = pthread_create(&thread, &attr, webserver_thread, NULL);
+    if (ret != 0) {
+        DBG_ERROR("Failed to create webserver thread: %s", strerror(ret));
+    }
+    
+    pthread_attr_destroy(&attr);
 }
 

@@ -78,5 +78,5 @@ int rtu_master_init(const char *port, int baud);
 void rtu_master_poll(agile_modbus_t *ctx,int fd, device_t *config);
 device_t *get_device_config(void);
 void free_device_config(device_t *config);
-
+void start_rtu_master(void);
 #endif

@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
-INCLUDE = -I./packages/mongoose -I./packages/cJSON -I./application/web_server -I./packages/FlashDB/inc -I./packages/agile_modbus/inc -I./packages/agile_modbus/util -I./application/database -I./application/log -I./application/modbus -DMG_ENABLE_PACKED_FS=1
+INCLUDE = -I./packages/mongoose -I./packages/cJSON -I./application/web_server -I./packages/FlashDB/inc -I./packages/agile_modbus/inc -I./packages/agile_modbus/util -I./application/database -I./application/log -I./application/modbus -I./application/system -DMG_ENABLE_PACKED_FS=1
 LIB = -lpthread
 TARGET = app
 SRCS = application/main.c \
@@ -22,7 +22,7 @@ SRCS = application/main.c \
 		packages/agile_modbus/util/agile_modbus_slave_util.c \
 		application/log/log_buffer.c \
 		application/log/log_output.c \
-
+		application/system/system.c
 OBJS = $(SRCS:.c=.o)
 
 run: clean all
