@@ -32,7 +32,7 @@ static node_t* parse_nodes(cJSON *nodes_array);
 static int get_register_count(data_type_t data_type);
 static void create_node_groups(device_t *device);
 static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_t *node);
-static void poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group);
+static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group);
 
 // Free memory for a node and its members
 static void free_node(node_t *node) {
@@ -421,7 +421,9 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
 }
 
 // Poll a group of nodes with the same function code
-static void poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group) {
+static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group) {
+    if (!ctx || fd < 0 || !device || !group) return RTU_MASTER_INVALID;
+
     int rc;
     
     // Send Modbus request based on function code
@@ -444,100 +446,119 @@ static void poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_
             break;
         default:
             DBG_ERROR("Unsupported function code: %d", group->function);
-            return;
+            return RTU_MASTER_INVALID;
     }
 
-    if (rc > 0) {
-        // Send request
-        serial_flush(fd);
-        int send_len = serial_write(fd, ctx->send_buf, rc);
-        if (send_len != rc) {
-            DBG_ERROR("Failed to send request");
-            return;
+    if (rc <= 0) {
+        DBG_ERROR("Failed to serialize request for group (function: %d, start: %d)",
+                 group->function, group->start_address);
+        return RTU_MASTER_ERROR;
+    }
+
+    // Send request
+    serial_flush(fd);
+    int send_len = serial_write(fd, ctx->send_buf, rc);
+    if (send_len != rc) {
+        DBG_ERROR("Failed to send request for group (function: %d, start: %d)",
+                 group->function, group->start_address);
+        return RTU_MASTER_ERROR;
+    }
+
+    // Read response
+    int read_len = serial_read(fd, ctx->read_buf, AGILE_MODBUS_MAX_ADU_LENGTH, 
+                             AGILE_MODBUS_RTU_TIMEOUT);
+    if (read_len < 0) {
+        DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
+                 group->function, group->start_address);
+        return RTU_MASTER_TIMEOUT;
+    }
+
+    if (read_len > 0) {
+        // Process response based on function code
+        switch(group->function) {
+            case 1: // Read coils
+                rc = agile_modbus_deserialize_read_bits(ctx, read_len, 
+                                                      group->data_buffer);
+                break;
+            case 2: // Read discrete inputs
+                rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, 
+                                                            group->data_buffer);
+                break;
+            case 3: // Read holding registers
+                rc = agile_modbus_deserialize_read_registers(ctx, read_len, 
+                                                           group->data_buffer);
+                break;
+            case 4: // Read input registers
+                rc = agile_modbus_deserialize_read_input_registers(ctx, read_len, 
+                                                                 group->data_buffer);
+                break;
         }
 
-        // Read response
-        int read_len = serial_read(fd, ctx->read_buf, AGILE_MODBUS_MAX_ADU_LENGTH, 
-                                 AGILE_MODBUS_RTU_TIMEOUT);
-        if (read_len < 0) {
-            DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
+        if (rc < 0) {
+            DBG_ERROR("Failed to deserialize response for group (function: %d, start: %d)",
                      group->function, group->start_address);
-        } else if (read_len > 0) {
-            // Process response based on function code
-            switch(group->function) {
-                case 1: // Read coils
-                    rc = agile_modbus_deserialize_read_bits(ctx, read_len, 
-                                                          group->data_buffer);
-                    break;
-                case 2: // Read discrete inputs
-                    rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, 
-                                                                group->data_buffer);
-                    break;
-                case 3: // Read holding registers
-                    rc = agile_modbus_deserialize_read_registers(ctx, read_len, 
-                                                               group->data_buffer);
-                    break;
-                case 4: // Read input registers
-                    rc = agile_modbus_deserialize_read_input_registers(ctx, read_len, 
-                                                                     group->data_buffer);
-                    break;
-            }
-
-            if (rc >= 0) {
-                // Update values for all nodes in the group
-                node_t *node = group->nodes;
-                while (node && node->function == group->function) {
-                    // Convert and store the value using the node's offset
-                    convert_node_value(node, &group->data_buffer[node->offset]);
-                    
-                    // Log the converted value
-                    switch (node->data_type) {
-                        case DATA_TYPE_BOOLEAN:
-                            DBG_INFO("Device: %s, Node: %s, Value: %d", 
-                                    device->name, node->name, node->value.bool_val);
-                            break;
-                        case DATA_TYPE_INT8:
-                            DBG_INFO("Device: %s, Node: %s, Value: %d", 
-                                    device->name, node->name, node->value.int8_val);
-                            break;
-                        case DATA_TYPE_UINT8:
-                            DBG_INFO("Device: %s, Node: %s, Value: %d", 
-                                    device->name, node->name, node->value.uint8_val);
-                            break;
-                        case DATA_TYPE_INT16:
-                            DBG_INFO("Device: %s, Node: %s, Value: %d", 
-                                    device->name, node->name, node->value.int16_val);
-                            break;
-                        case DATA_TYPE_UINT16:
-                            DBG_INFO("Device: %s, Node: %s, Value: %d", 
-                                    device->name, node->name, node->value.uint16_val);
-                            break;
-                        case DATA_TYPE_INT32_ABCD:
-                        case DATA_TYPE_INT32_CDAB:
-                            DBG_INFO("Device: %s, Node: %s, Value: %ld", 
-                                    device->name, node->name, node->value.int32_val);
-                            break;
-                        case DATA_TYPE_UINT32_ABCD:
-                        case DATA_TYPE_UINT32_CDAB:
-                            DBG_INFO("Device: %s, Node: %s, Value: %lu", 
-                                    device->name, node->name, node->value.uint32_val);
-                            break;
-                        case DATA_TYPE_FLOAT_ABCD:
-                        case DATA_TYPE_FLOAT_CDAB:
-                            DBG_INFO("Device: %s, Node: %s, Value: %f", 
-                                    device->name, node->name, node->value.float_val);
-                            break;
-                        case DATA_TYPE_DOUBLE:
-                            DBG_INFO("Device: %s, Node: %s, Value: %lf", 
-                                    device->name, node->name, node->value.double_val);
-                            break;
-                    }
-                    
-                    node = node->next;
-                }
-            }
+            return RTU_MASTER_ERROR;
         }
+
+        // Update values for all nodes in the group
+        node_t *node = group->nodes;
+        while (node && node->function == group->function) {
+            // Convert and store the value using the node's offset
+            int convert_result = convert_node_value(node, &group->data_buffer[node->offset]);
+            if (convert_result != RTU_MASTER_OK) {
+                DBG_ERROR("Failed to convert value for node %s in group", node->name);
+                return convert_result;
+            }
+            
+            // Log the converted value
+            switch (node->data_type) {
+                case DATA_TYPE_BOOLEAN:
+                    DBG_INFO("Device: %s, Node: %s, Value: %d", 
+                            device->name, node->name, node->value.bool_val);
+                    break;
+                case DATA_TYPE_INT8:
+                    DBG_INFO("Device: %s, Node: %s, Value: %d", 
+                            device->name, node->name, node->value.int8_val);
+                    break;
+                case DATA_TYPE_UINT8:
+                    DBG_INFO("Device: %s, Node: %s, Value: %d", 
+                            device->name, node->name, node->value.uint8_val);
+                    break;
+                case DATA_TYPE_INT16:
+                    DBG_INFO("Device: %s, Node: %s, Value: %d", 
+                            device->name, node->name, node->value.int16_val);
+                    break;
+                case DATA_TYPE_UINT16:
+                    DBG_INFO("Device: %s, Node: %s, Value: %d", 
+                            device->name, node->name, node->value.uint16_val);
+                    break;
+                case DATA_TYPE_INT32_ABCD:
+                case DATA_TYPE_INT32_CDAB:
+                    DBG_INFO("Device: %s, Node: %s, Value: %ld", 
+                            device->name, node->name, node->value.int32_val);
+                    break;
+                case DATA_TYPE_UINT32_ABCD:
+                case DATA_TYPE_UINT32_CDAB:
+                    DBG_INFO("Device: %s, Node: %s, Value: %lu", 
+                            device->name, node->name, node->value.uint32_val);
+                    break;
+                case DATA_TYPE_FLOAT_ABCD:
+                case DATA_TYPE_FLOAT_CDAB:
+                    DBG_INFO("Device: %s, Node: %s, Value: %f", 
+                            device->name, node->name, node->value.float_val);
+                    break;
+                case DATA_TYPE_DOUBLE:
+                    DBG_INFO("Device: %s, Node: %s, Value: %lf", 
+                            device->name, node->name, node->value.double_val);
+                    break;
+            }
+            
+            node = node->next;
+        }
+        return RTU_MASTER_OK;
     }
+
+    return RTU_MASTER_ERROR;
 }
 
 // Get device configuration from database and parse JSON
@@ -660,7 +681,11 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
             // Poll each group
             node_group_t *current_group = current_device->groups;
             while (current_group) {
-                poll_group_node(ctx, fd, current_device, current_group);
+                int result = poll_group_node(ctx, fd, current_device, current_group);
+                if (result != RTU_MASTER_OK) {
+                    DBG_ERROR("Failed to poll group %s (error: %d)", 
+                             current_group->function, result);
+                }
                 // Sleep after each group poll
                 usleep(current_device->polling_interval * 1000);
                 current_group = current_group->next;
@@ -686,7 +711,6 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
 
 static void *rtu_master_thread(void *arg) {
     device_t *config = (device_t *)arg;
-    struct timespec last_poll_time, current_time;
     int fd;
     uint8_t master_send_buf[AGILE_MODBUS_MAX_ADU_LENGTH];
     uint8_t master_recv_buf[AGILE_MODBUS_MAX_ADU_LENGTH];
@@ -711,29 +735,10 @@ static void *rtu_master_thread(void *arg) {
 
     DBG_INFO("RTU master polling thread started");
 
-    // Get initial timestamp
-    clock_gettime(CLOCK_MONOTONIC, &last_poll_time);
-
     // Run continuously
     while (1) {
-        // Poll all devices
+        // Poll all devices (each device handles its own polling interval)
         rtu_master_poll(ctx, fd, config);
-
-        // Calculate time spent in polling
-        clock_gettime(CLOCK_MONOTONIC, &current_time);
-        long elapsed_ms = (current_time.tv_sec - last_poll_time.tv_sec) * 1000 +
-                         (current_time.tv_nsec - last_poll_time.tv_nsec) / 1000000;
-
-        // Calculate remaining sleep time
-        long sleep_time = 100 - elapsed_ms; // 100ms target cycle time
-        if (sleep_time > 0) {
-            usleep(sleep_time * 1000);
-        } else {
-            DBG_WARN("Polling cycle took longer than expected: %ld ms", elapsed_ms);
-        }
-
-        // Update last poll time
-        last_poll_time = current_time;
     }
 
     return NULL;
