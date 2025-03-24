@@ -375,8 +375,10 @@ function System() {
   // Add function to get WebSocket URL
   const getWebSocketUrl = () => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    return `${protocol}//${host}/websocket`;
+    // const host = window.location.hostname;
+    // const port = window.location.port || "9000"; // Use port 9000 as default
+    // const port = 9000;
+    return `${protocol}//${window.location.hostname}:9000`;
   };
 
   // Update WebSocket connection handling

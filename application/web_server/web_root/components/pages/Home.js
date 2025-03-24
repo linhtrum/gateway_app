@@ -1,17 +1,12 @@
 "use strict";
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
-import { Icons, Button } from "../Components.js";
-
-
-
+import { Icons, Button, Card } from "../Components.js";
 
 function Home() {
   const [displayCards, setDisplayCards] = useState([]);
   const [devices, setDevices] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingCard, setIsAddingCard] = useState(false);
-  const [editingCardId, setEditingCardId] = useState(null);
-  const [editingTitle, setEditingTitle] = useState("");
   const [wsStatus, setWsStatus] = useState("disconnected");
   const [newCardConfig, setNewCardConfig] = useState({
     t: "",
@@ -368,54 +363,6 @@ function Home() {
     });
   };
 
-  const handleStartEditing = (cardIndex, currentTitle) => {
-    setEditingCardId(cardIndex);
-    setEditingTitle(currentTitle);
-  };
-
-  const handleTitleUpdate = (cardIndex) => {
-    const trimmedTitle = editingTitle.trim();
-    if (!trimmedTitle) {
-      alert("Title cannot be empty");
-      return;
-    }
-
-    if (trimmedTitle.length > 20) {
-      alert("Title must not exceed 20 characters");
-      return;
-    }
-
-    setDisplayCards((prev) =>
-      prev.map((card, index) =>
-        index === cardIndex ? { ...card, t: trimmedTitle } : card
-      )
-    );
-    setEditingCardId(null);
-    setEditingTitle("");
-  };
-
-  const handleTitleKeyPress = (e, cardIndex) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleTitleUpdate(cardIndex);
-    } else if (e.key === "Escape") {
-      setEditingCardId(null);
-      setEditingTitle("");
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingCardId(null);
-    setEditingTitle("");
-  };
-
-  const handleTitleChange = (e) => {
-    const newTitle = e.target.value;
-    if (newTitle.length <= 20) {
-      setEditingTitle(newTitle);
-    }
-  };
-
   const handleDeleteCard = (cardIndex) => {
     if (confirm("Are you sure you want to delete this card?")) {
       setDisplayCards((prev) => prev.filter((_, index) => index !== cardIndex));
@@ -582,7 +529,7 @@ function Home() {
                 <input
                   type="text"
                   value=${newCardConfig.t}
-                  onChange=${(e) =>
+                  onInput=${(e) =>
                     setNewCardConfig({
                       ...newCardConfig,
                       t: e.target.value.slice(0, 20),
@@ -599,7 +546,7 @@ function Home() {
                 >
                 <select
                   value=${newCardConfig.di}
-                  onChange=${(e) => {
+                  onInput=${(e) => {
                     setNewCardConfig({
                       ...newCardConfig,
                       di: e.target.value,
@@ -624,7 +571,7 @@ function Home() {
                 >
                 <select
                   value=${newCardConfig.ti}
-                  onChange=${(e) =>
+                  onInput=${(e) =>
                     setNewCardConfig({
                       ...newCardConfig,
                       ti: e.target.value,
@@ -650,7 +597,7 @@ function Home() {
                 >
                 <select
                   value=${newCardConfig.hi}
-                  onChange=${(e) =>
+                  onInput=${(e) =>
                     setNewCardConfig({
                       ...newCardConfig,
                       hi: e.target.value,
@@ -694,105 +641,18 @@ function Home() {
         <div class="grid grid-rows-[auto] grid-cols-4 gap-4">
           ${filteredCards.map(
             (card, index) => html`
-              <div class="bg-white rounded-lg shadow-md overflow-hidden">
-                <div
-                  class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center"
-                >
-                  ${editingCardId === index
-                    ? html`
-                        <div class="flex items-center flex-1 gap-2">
-                          <input
-                            type="text"
-                            value=${editingTitle}
-                            onChange=${handleTitleChange}
-                            onKeyDown=${(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleTitleUpdate(index);
-                              } else if (e.key === "Escape") {
-                                handleCancelEdit();
-                              }
-                            }}
-                            maxlength="20"
-                            class="flex-1 px-2 py-1 text-lg font-semibold text-gray-800 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            autofocus
-                          />
-                          <button
-                            onClick=${() => handleTitleUpdate(index)}
-                            class="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
-                            title="Save changes"
-                          >
-                            <${Icons.SaveIcon} className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick=${handleCancelEdit}
-                            class="p-1.5 bg-red-500 text-red-100 rounded hover:bg-red-600 flex items-center justify-center"
-                            title="Discard changes"
-                          >
-                            <${Icons.CloseIcon} className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      `
-                    : html`
-                        <div class="flex items-center flex-1 min-w-0">
-                          <h2
-                            class="text-lg font-semibold text-gray-800 truncate"
-                          >
-                            ${card.t}
-                          </h2>
-                          <button
-                            onClick=${() => handleStartEditing(index, card.t)}
-                            class="ml-2 text-gray-400 hover:text-blue-600"
-                            title="Edit title"
-                          >
-                            <${Icons.EditIcon} className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      `}
-                  <button
-                    onClick=${() => handleDeleteCard(index)}
-                    class="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-red-500 transition-all ml-2 flex-shrink-0"
-                    title="Delete card"
-                  >
-                    <${Icons.TrashIcon} className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div class="p-4">
-                  <div class="text-sm text-gray-500 mb-2 truncate">
-                    ${card.dn}
-                  </div>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-gray-50 p-3 rounded-md shadow-sm">
-                      <div class="flex items-center justify-between">
-                        <span class="text-sm text-gray-500">Temperature</span>
-                        <span class="text-xs text-gray-400">${card.tn.a}</span>
-                      </div>
-                      <div class="mt-1 flex items-baseline">
-                        <span class="text-2xl font-semibold text-blue-600">
-                          ${card.tn.v || "N/A"}
-                        </span>
-                        <span class="ml-1 text-gray-600">°C</span>
-                      </div>
-                    </div>
-                    <div class="bg-gray-50 p-3 rounded-md shadow-sm">
-                      <div class="flex items-center justify-between">
-                        <span class="text-sm text-gray-500">Humidity</span>
-                        <span class="text-xs text-gray-400">${card.hn.a}</span>
-                      </div>
-                      <div class="mt-1 flex items-baseline">
-                        <span class="text-2xl font-semibold text-green-600">
-                          ${card.hn.v || "N/A"}
-                        </span>
-                        <span class="ml-1 text-gray-600">%</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="mt-3 text-xs text-gray-400 flex items-center">
-                    <${Icons.ClockIcon} className="w-3 h-3 mr-1" />
-                    Last updated: ${formatTime(card.lastUpdate)}
-                  </div>
-                </div>
-              </div>
+              <${Card}
+                key=${index}
+                card=${card}
+                onDelete=${() => handleDeleteCard(index)}
+                onTitleUpdate=${(newTitle) => {
+                  setDisplayCards((prev) =>
+                    prev.map((c, i) =>
+                      i === index ? { ...c, t: newTitle } : c
+                    )
+                  );
+                }}
+              />
               ${(index + 1) % 4 === 0 && index !== filteredCards.length - 1
                 ? html`<div class="col-span-4"></div>`
                 : ""}

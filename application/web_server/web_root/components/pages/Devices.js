@@ -2,9 +2,6 @@
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
 import { Icons, Button } from "../Components.js";
 
-
-
-
 // Constants and configuration
 const CONFIG = {
   MAX_DEVICES: 128,

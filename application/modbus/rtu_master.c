@@ -9,6 +9,7 @@
 #include "cJSON.h"
 #include "db.h"
 #include "../web_server/net.h"
+#include "../web_server/websocket.h"
 
 #define DBG_TAG "RTU_MASTER"
 #define DBG_LVL LOG_INFO
@@ -309,6 +310,36 @@ static void create_node_groups(device_t *device) {
     device->groups = groups;
 }
 
+// Convert byte array to hex string and send via websocket
+static void send_hex_string(const uint8_t *data, int len) {
+    if (!data || len <= 0) return;
+
+    // Each byte needs 4 chars (0x + 2 hex chars) plus 1 space, and 1 null terminator
+    char *hex_str = malloc(len * 5 + 1);
+    if (!hex_str) {
+        DBG_ERROR("Failed to allocate memory for hex string");
+        return;
+    }
+
+    // Convert each byte to hex chars with 0x prefix
+    int pos = 0;
+    for (int i = 0; i < len; i++) {
+        pos += snprintf(hex_str + pos, 6, "0x%02X ", data[i]);
+    }
+
+    // Remove trailing space and null terminate
+    if (pos > 0) {
+        hex_str[pos-1] = '\0';
+    } else {
+        hex_str[0] = '\0';
+    }
+
+    // Send via websocket
+    websocket_log_send(hex_str);
+    
+    free(hex_str);
+}
+
 // Poll a single node with improved error handling
 static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_t *node) {
     if (!ctx || fd < 0 || !device || !node) return RTU_MASTER_INVALID;
@@ -358,6 +389,9 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     if (read_len > 0) {
+        // Send hex string of response data
+        send_hex_string(ctx->read_buf, read_len);
+
         // Process response based on function code
         switch(node->function) {
             case 1: // Read coils
@@ -483,6 +517,9 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     if (read_len > 0) {
+        // Send hex string of response data
+        send_hex_string(ctx->read_buf, read_len);
+
         // Process response based on function code
         switch(group->function) {
             case 1: // Read coils

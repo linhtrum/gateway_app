@@ -22,7 +22,9 @@ SRCS = application/main.c \
 		packages/agile_modbus/util/agile_modbus_slave_util.c \
 		application/log/log_buffer.c \
 		application/log/log_output.c \
-		application/system/system.c
+		application/system/system.c \
+		application/web_server/websocket.c
+		
 OBJS = $(SRCS:.c=.o)
 
 run: clean all

@@ -1,5 +1,5 @@
 "use strict";
-import { h, html } from "../bundle.js";
+import { h, html, useState, useEffect } from "../bundle.js";
 
 export const Icons = {
   // Loading spinner icon
@@ -548,6 +548,159 @@ export function Tabs({ tabs, activeTab, onTabChange }) {
           `
         )}
       </nav>
+    </div>
+  `;
+}
+
+export function Card({ card, onDelete, onTitleUpdate }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(card.t);
+  const [lastUpdate, setLastUpdate] = useState(card.lastUpdate);
+
+  // Update local state when props change
+  useEffect(() => {
+    setTitle(card.t);
+    setLastUpdate(card.lastUpdate);
+  }, [card.t, card.lastUpdate]);
+
+  const handleTitleUpdate = () => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      alert("Title cannot be empty");
+      return;
+    }
+
+    if (trimmedTitle.length > 20) {
+      alert("Title must not exceed 20 characters");
+      return;
+    }
+
+    onTitleUpdate(trimmedTitle);
+    setIsEditing(false);
+  };
+
+  const handleTitleKeyPress = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleTitleUpdate();
+    } else if (e.key === "Escape") {
+      setIsEditing(false);
+      setTitle(card.t);
+    }
+  };
+
+  const handleTitleChange = (e) => {
+    const newTitle = e.target.value;
+    if (newTitle.length <= 20) {
+      setTitle(newTitle);
+    }
+  };
+
+  const formatTime = (date) => {
+    if (!date) return "Never";
+    const now = new Date();
+    const diff = now - date;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (seconds < 60) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return date.toLocaleString();
+  };
+
+  return html`
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <div
+        class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center"
+      >
+        ${isEditing
+          ? html`
+              <div class="flex items-center flex-1 gap-2">
+                <input
+                  type="text"
+                  value=${title}
+                  onChange=${handleTitleChange}
+                  onKeyDown=${handleTitleKeyPress}
+                  maxlength="20"
+                  class="flex-1 px-2 py-1 text-lg font-semibold text-gray-800 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autofocus
+                />
+                <button
+                  onClick=${handleTitleUpdate}
+                  class="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
+                  title="Save changes"
+                >
+                  <${Icons.SaveIcon} className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick=${() => {
+                    setIsEditing(false);
+                    setTitle(card.t);
+                  }}
+                  class="p-1.5 bg-red-500 text-red-100 rounded hover:bg-red-600 flex items-center justify-center"
+                  title="Discard changes"
+                >
+                  <${Icons.CloseIcon} className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            `
+          : html`
+              <div class="flex items-center flex-1 min-w-0">
+                <h2 class="text-lg font-semibold text-gray-800 truncate">
+                  ${title}
+                </h2>
+                <button
+                  onClick=${() => setIsEditing(true)}
+                  class="ml-2 text-gray-400 hover:text-blue-600"
+                  title="Edit title"
+                >
+                  <${Icons.EditIcon} className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            `}
+        <button
+          onClick=${onDelete}
+          class="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-red-500 transition-all ml-2 flex-shrink-0"
+          title="Delete card"
+        >
+          <${Icons.TrashIcon} className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div class="p-4">
+        <div class="text-sm text-gray-500 mb-2 truncate">${card.dn}</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-gray-50 p-3 rounded-md shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-500">Temperature</span>
+              <span class="text-xs text-gray-400">${card.tn.a}</span>
+            </div>
+            <div class="mt-1 flex items-baseline">
+              <span class="text-2xl font-semibold text-blue-600">
+                ${card.tn.v || "N/A"}
+              </span>
+              <span class="ml-1 text-gray-600">°C</span>
+            </div>
+          </div>
+          <div class="bg-gray-50 p-3 rounded-md shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-500">Humidity</span>
+              <span class="text-xs text-gray-400">${card.hn.a}</span>
+            </div>
+            <div class="mt-1 flex items-baseline">
+              <span class="text-2xl font-semibold text-green-600">
+                ${card.hn.v || "N/A"}
+              </span>
+              <span class="ml-1 text-gray-600">%</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 text-xs text-gray-400 flex items-center">
+          <${Icons.ClockIcon} className="w-3 h-3 mr-1" />
+          Last updated: ${formatTime(lastUpdate)}
+        </div>
+      </div>
     </div>
   `;
 }

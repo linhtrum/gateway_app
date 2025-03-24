@@ -9,6 +9,7 @@
 #include "log/log_buffer.h"
 #include "log/log_output.h"
 #include "system/system.h"
+#include "web_server/websocket.h"
 
 #define DBG_TAG "MAIN"
 #define DBG_LVL LOG_INFO
@@ -40,12 +41,15 @@ int main(int argc, char *argv[]) {
     // Initialize web server
     web_init();
 
+    // Initialize websocket log server
+    websocket_log_start();
+
     // Initialize UDP server
     start_udp_server();
 
     // Initialize modbus master
     start_rtu_master();
-    
+
     DBG_INFO("Application started");
 
     // Block on main thread (will be interrupted by signals)
