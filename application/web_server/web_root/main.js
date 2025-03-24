@@ -7,6 +7,7 @@ import Home from "./components/pages/Home.js";
 import Network from "./components/pages/Network.js";
 import Devices from "./components/pages/Devices.js";
 import System from "./components/pages/System.js";
+import Logs from "./components/pages/Logs.js";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -35,6 +36,7 @@ function App() {
             <${Network} path="/network" />
             <${Devices} path="/devices" />
             <${System} path="/system" />
+            <${Logs} path="/logs" />
           </${Router}>
         </main>
       </div>

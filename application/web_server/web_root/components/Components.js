@@ -1,4 +1,3 @@
-"use strict";
 import { h, html, useState, useEffect } from "../bundle.js";
 
 export const Icons = {
@@ -489,6 +488,11 @@ export function Sidebar({ currentRoute }) {
       path: "/devices",
       label: "Devices",
       icon: html`<${Icons.DevicesIcon} className="w-5 h-5" />`,
+    },
+    {
+      path: "/logs",
+      label: "Logs",
+      icon: html`<${Icons.ClockIcon} className="w-5 h-5" />`,
     },
     {
       path: "/system",
