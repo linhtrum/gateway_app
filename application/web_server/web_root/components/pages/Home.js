@@ -2,6 +2,9 @@
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
 import { Icons, Button } from "../Components.js";
 
+
+
+
 function Home() {
   const [displayCards, setDisplayCards] = useState([]);
   const [devices, setDevices] = useState([]);

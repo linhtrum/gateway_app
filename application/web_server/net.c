@@ -20,7 +20,7 @@
 #define DEFAULT_HTTP_URL "http://0.0.0.0"
 
 #define DBG_TAG "WEB"
-#define DBG_LVL LOG_ERROR
+#define DBG_LVL LOG_INFO
 #include "dbg.h"
 
 struct user {
@@ -32,6 +32,8 @@ static struct thread_data *t_data = NULL;
 struct thread_data *get_thread_data(void) {
     return t_data;
 }
+
+static struct mg_connection *ws_conn = NULL;
 
 static const char *s_json_header =
     "Content-Type: application/json\r\n"
@@ -505,14 +507,88 @@ static bool write_network_config(const char *json_str) {
         return false;
     }
 
-    // Write network config to database
+    // First write to database
     int result = db_write("network_config", (void*)json_str, strlen(json_str) + 1);
     if (result != 0) {
         DBG_ERROR("Failed to write network config to database");
         return false;
     }
 
-    DBG_INFO("Network config written to database successfully");
+    // Parse JSON configuration
+    cJSON *root = cJSON_Parse(json_str);
+    if (!root) {
+        DBG_ERROR("Failed to parse network config JSON");
+        return false;
+    }
+
+    // Open network config file
+    FILE *fp = fopen("/lib/systemd/network/80-wired.network", "w");
+    if (!fp) {
+        DBG_ERROR("Failed to open network config file");
+        cJSON_Delete(root);
+        return false;
+    }
+
+    // Write common header
+    fprintf(fp, "[Match]\n");
+    fprintf(fp, "Name=eth0\n");
+    fprintf(fp, "KernelCommandLine=!nfsroot\n\n");
+
+    // Write Network section
+    fprintf(fp, "[Network]\n");
+    
+    // Check if DHCP is enabled
+    cJSON *dh = cJSON_GetObjectItem(root, "dh");
+    if (dh && dh->type == cJSON_True) {
+        // DHCP mode
+        fprintf(fp, "DHCP=yes\n\n");
+    } else {
+        // Static IP mode
+        cJSON *ip = cJSON_GetObjectItem(root, "ip");
+        cJSON *sm = cJSON_GetObjectItem(root, "sm");
+        cJSON *gw = cJSON_GetObjectItem(root, "gw");
+        
+        if (ip && sm) {
+            // Convert netmask to CIDR notation
+            char *netmask = sm->valuestring;
+            unsigned int mask[4];
+            int cidr = 0;
+            
+            if (sscanf(netmask, "%u.%u.%u.%u", &mask[0], &mask[1], &mask[2], &mask[3]) == 4) {
+                // Calculate CIDR by counting consecutive 1s from left to right
+                for (int i = 0; i < 4; i++) {
+                    unsigned int m = mask[i];
+                    for (int j = 0; j < 8; j++) {
+                        if (m & 0x80) {
+                            cidr++;
+                        } else {
+                            // If we find a 0, we should stop counting
+                            goto done_cidr;
+                        }
+                        m <<= 1;
+                    }
+                }
+            }
+done_cidr:
+            fprintf(fp, "Address=%s/%d\n", ip->valuestring, cidr);
+        }
+        
+        if (gw) {
+            fprintf(fp, "Gateway=%s\n", gw->valuestring);
+        }
+        fprintf(fp, "\n");
+    }
+
+    // Write DHCP section
+    fprintf(fp, "[DHCP]\n");
+    fprintf(fp, "RouteMetric=10\n");
+    fprintf(fp, "ClientIdentifier=mac\n");
+
+    // Close file
+    fclose(fp);
+    cJSON_Delete(root);
+
+    DBG_INFO("Network config written successfully");
     return true;
 }
 
@@ -785,12 +861,58 @@ static void handle_factory_reset_set(struct mg_connection *c, struct mg_http_mes
     mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
 }
 
+static bool get_http_config(char *url, size_t url_size, int *port) {
+    if (!url || !port) {
+        DBG_ERROR("Invalid parameters");
+        return false;
+    }
+
+    // Read system config from database
+    char *json_str = read_system_config();
+    if (!json_str) {
+        DBG_ERROR("Failed to read system config");
+        return false;
+    }
+
+    // Parse JSON configuration
+    cJSON *root = cJSON_Parse(json_str);
+    if (!root) {
+        DBG_ERROR("Failed to parse system config JSON");
+        free(json_str);
+        return false;
+    }
+
+    // Get HTTP port from config
+    cJSON *http_port = cJSON_GetObjectItem(root, "port");
+
+    // Always use default HTTP URL
+    strncpy(url, DEFAULT_HTTP_URL, url_size - 1);
+    url[url_size - 1] = '\0';
+
+    if (http_port && http_port->type == cJSON_Number) {
+        *port = http_port->valueint;
+    } else {
+        *port = DEFAULT_HTTP_PORT;
+    }
+
+    cJSON_Delete(root);
+    free(json_str);
+
+    DBG_INFO("HTTP config: URL=%s, Port=%d", url, *port);
+    return true;
+}
+
+// Function to send message to all connected websocket clients
+void send_websocket_message(const char *message) {
+    if (!message || !ws_conn) return;
+    
+    mg_wakeup(ws_conn->mgr, ws_conn->id, message, strlen(message));
+}
+
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
     if(ev == MG_EV_OPEN && c->is_listening) {
         DBG_INFO("Connection opened");
-        t_data = calloc(1, sizeof(*t_data));
-        t_data->mgr = c->mgr;
-        t_data->conn_id = c->id;
+        ws_conn = c;
     }
     else if(ev == MG_EV_ACCEPT) {
         DBG_INFO("Connection accepted");
@@ -857,7 +979,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
     }
     else if (ev == MG_EV_WAKEUP) {
         struct mg_str *data = (struct mg_str *) ev_data;
-        // Broadcast message to all connected websocket clients.
+        // Broadcast message to all connected websocket clients
         for (struct mg_connection *wc = c->mgr->conns; wc != NULL; wc = wc->next) {
             if (wc->data[0] == 'W') {
                 mg_ws_send(wc, data->buf, data->len, WEBSOCKET_OP_TEXT);
@@ -869,9 +991,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
 static void *webserver_thread(void *arg) {
     struct mg_mgr mgr;
     char listen_url[128];
+    char http_url[128];
+    int http_port;
+
+    // Get HTTP configuration from system config
+    if (!get_http_config(http_url, sizeof(http_url), &http_port)) {
+        DBG_ERROR("Failed to get HTTP config, using defaults");
+        strncpy(http_url, DEFAULT_HTTP_URL, sizeof(http_url) - 1);
+        http_port = DEFAULT_HTTP_PORT;
+    }
 
     mg_mgr_init(&mgr);
-    snprintf(listen_url, sizeof(listen_url), "%s:%d", DEFAULT_HTTP_URL, DEFAULT_HTTP_PORT);
+    snprintf(listen_url, sizeof(listen_url), "%s:%d", http_url, http_port);
     mg_http_listen(&mgr, listen_url, fn, NULL);
     mg_wakeup_init(&mgr);
     DBG_INFO("Web server starting on %s", listen_url);

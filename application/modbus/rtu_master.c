@@ -8,6 +8,7 @@
 #include "serial.h"
 #include "cJSON.h"
 #include "db.h"
+#include "../web_server/net.h"
 
 #define DBG_TAG "RTU_MASTER"
 #define DBG_LVL LOG_INFO
@@ -27,6 +28,7 @@ static int get_register_count(data_type_t data_type);
 static void create_node_groups(device_t *device);
 static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_t *node);
 static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group);
+static char* build_node_json(const char *node_name, node_t *node);
 
 // Free memory for a node and its members
 static void free_node(node_t *node) {
@@ -412,6 +414,14 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
                     DBG_INFO("%s.%s = %.12lf", device->name, node->name, node->value.double_val);
                     break;
             }
+
+            // Send websocket update
+            char *json_msg = build_node_json(node->name, node);
+            if (json_msg) {
+                send_websocket_message(json_msg);
+                free(json_msg);
+            }
+
             return RTU_MASTER_OK;
         }
     }
@@ -557,6 +567,13 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
                             device->name, node->name, node->value.double_val);
                     break;
             }
+
+            // Send websocket update
+            char *json_msg = build_node_json(node->name, node);
+            if (json_msg) {
+                send_websocket_message(json_msg);
+                free(json_msg);
+            }
             
             node = node->next;
         }
@@ -564,6 +581,75 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     return RTU_MASTER_ERROR;
+}
+
+// Build JSON message from node data
+static char* build_node_json(const char *node_name, node_t *node) {
+    if (!node_name || !node) {
+        DBG_ERROR("Invalid parameters for building JSON");
+        return NULL;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        DBG_ERROR("Failed to create JSON object");
+        return NULL;
+    }
+
+    // Add type field
+    cJSON_AddStringToObject(root, "type", "update");
+    
+    // Add node name
+    cJSON_AddStringToObject(root, "n", node_name);
+
+    // Add value based on data type
+    switch (node->data_type) {
+        case DATA_TYPE_BOOLEAN:
+            cJSON_AddBoolToObject(root, "v", node->value.bool_val);
+            break;
+        case DATA_TYPE_INT8:
+            cJSON_AddNumberToObject(root, "v", node->value.int8_val);
+            break;
+        case DATA_TYPE_UINT8:
+            cJSON_AddNumberToObject(root, "v", node->value.uint8_val);
+            break;
+        case DATA_TYPE_INT16:
+            cJSON_AddNumberToObject(root, "v", node->value.int16_val);
+            break;
+        case DATA_TYPE_UINT16:
+            cJSON_AddNumberToObject(root, "v", node->value.uint16_val);
+            break;
+        case DATA_TYPE_INT32_ABCD:
+        case DATA_TYPE_INT32_CDAB:
+            cJSON_AddNumberToObject(root, "v", node->value.int32_val);
+            break;
+        case DATA_TYPE_UINT32_ABCD:
+        case DATA_TYPE_UINT32_CDAB:
+            cJSON_AddNumberToObject(root, "v", node->value.uint32_val);
+            break;
+        case DATA_TYPE_FLOAT_ABCD:
+        case DATA_TYPE_FLOAT_CDAB:
+            cJSON_AddNumberToObject(root, "v", node->value.float_val);
+            break;
+        case DATA_TYPE_DOUBLE:
+            cJSON_AddNumberToObject(root, "v", node->value.double_val);
+            break;
+        default:
+            DBG_ERROR("Unsupported data type: %d", node->data_type);
+            cJSON_Delete(root);
+            return NULL;
+    }
+
+    // Convert to string
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!json_str) {
+        DBG_ERROR("Failed to convert JSON to string");
+        return NULL;
+    }
+
+    return json_str;
 }
 
 // Get device configuration from database and parse JSON
