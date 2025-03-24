@@ -10,10 +10,10 @@
 #include "db.h"
 
 #define DBG_TAG "RTU_MASTER"
-#define DBG_LVL LOG_ERROR
+#define DBG_LVL LOG_INFO
 #include "dbg.h"
 
-#define DEFAULT_PORT "/dev/ttymxc0"
+#define DEFAULT_PORT "/dev/ttymxc1"
 #define DEFAULT_BAUD 115200
 
 // Function declarations
@@ -348,7 +348,7 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     // Read response with node-specific timeout
-    int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, node->timeout);
+    int read_len = serial_receive(fd, ctx->read_buf, ctx->read_bufsz, node->timeout);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for node %s (timeout: %dms)", 
                  node->name, node->timeout);
@@ -464,7 +464,7 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Read response
-    int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, 
+    int read_len = serial_receive(fd, ctx->read_buf, ctx->read_bufsz, 
                              MODBUS_RTU_TIMEOUT);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 

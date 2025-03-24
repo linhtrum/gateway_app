@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 #include <sys/time.h>
-
+#include <errno.h>
 #define DBG_TAG "SERIAL"
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
@@ -64,7 +64,7 @@ int serial_open(const char *port, int baud) {
 
     // Set read timeout
     tty.c_cc[VMIN] = 0;      // No minimum characters
-    tty.c_cc[VTIME] = 0;    // 1 second timeout
+    tty.c_cc[VTIME] = 0;    // 10 second timeout
 
     // Apply settings
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
@@ -75,6 +75,46 @@ int serial_open(const char *port, int baud) {
 
     DBG_INFO("Serial port %s opened successfully", port);
     return fd;
+}
+
+int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout)
+{
+    int len = 0;
+    int rc = 0;
+    fd_set rset;
+    struct timeval tv;
+
+    while (bufsz > 0) {
+        FD_ZERO(&rset);
+        FD_SET(fd, &rset);
+
+        tv.tv_sec = timeout / 1000;
+        tv.tv_usec = (timeout % 1000) * 1000;
+        rc = select(fd + 1, &rset, NULL, NULL, &tv);
+        if (rc == -1) {
+            if (errno == EINTR)
+                continue;
+        }
+
+        if (rc <= 0) {
+            break;
+        }
+
+        rc = read(fd, buf + len, bufsz);
+        if (rc <= 0) {
+            break;
+        }
+        len += rc;
+        bufsz -= rc;
+
+        timeout = 20;
+    }
+
+    if (rc >= 0) {
+        rc = len;
+    }
+
+    return rc;
 }
 
 // Read data from serial port

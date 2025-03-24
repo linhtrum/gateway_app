@@ -43,6 +43,9 @@ int main(int argc, char *argv[]) {
     // Initialize UDP server
     start_udp_server();
 
+    // Initialize modbus master
+    start_rtu_master();
+    
     DBG_INFO("Application started");
 
     // Block on main thread (will be interrupted by signals)

@@ -19,10 +19,10 @@ static int g_serial_fd = -1;
 
 // Log level strings - using array for O(1) lookup
 static const char* const level_strings[] = {
-    [LOG_ERROR] = "ERROR",
-    [LOG_WARN]  = "WARN",
-    [LOG_INFO]  = "INFO",
-    [LOG_DEBUG] = "DEBUG"
+    [LOG_ERROR] = "E",
+    [LOG_WARN]  = "W",
+    [LOG_INFO]  = "I",
+    [LOG_DEBUG] = "D"
 };
 
 // Optimized timestamp formatting
@@ -98,7 +98,7 @@ void log_output_format_entry(const log_entry_t* entry, char* output, size_t outp
     
     // Format log entry with bounds checking
     int written = snprintf(output, output_size, 
-        "[%s] [%s] [%s] [%s:%d] %s\n",
+        "[%s] [%s/%s] [%s:%d] %s\n",
         g_time_str,
         level_strings[entry->level],
         entry->tag,
