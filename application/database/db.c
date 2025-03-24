@@ -16,13 +16,13 @@
 #define DB_MAX_SIZE DB_SEC_SIZE * 256
 
 static struct fdb_kvdb kvdb;
-static pthread_mutex_t kv_locker, ts_locker;
-static pthread_mutexattr_t kv_locker_attr, ts_locker_attr;
+static pthread_mutex_t kv_locker;
+static pthread_mutexattr_t kv_locker_attr;
 static uint32_t boot_count = 0;
 static struct fdb_default_kv_node default_kv_table[] = {
         {"card_config", "[{\"t\":\"Rack001\",\"dn\":\"device01\",\"tn\":{\"n\":\"node0101\",\"a\":1,\"f\":3,\"dt\":5,\"t\":1000},\"hn\":{\"n\":\"node0102\",\"a\":2,\"f\":3,\"dt\":5,\"t\":1000}},{\"t\":\"Rack002\",\"dn\":\"device02\",\"tn\":{\"n\":\"node0201\",\"a\":1,\"f\":3,\"dt\":5,\"t\":1000},\"hn\":{\"n\":\"node0202\",\"a\":2,\"f\":3,\"dt\":5,\"t\":1000}}]", 0}, 
         {"network_config", "{\"ip\":\"192.168.0.10\",\"sm\":\"255.255.255.0\",\"gw\":\"192.168.0.1\",\"d1\":\"8.8.8.8\",\"d2\":\"8.8.4.4\"}", 0}, 
-        {"device_config", "[{\"n\":\"device01\",\"da\":\"1\",\"pi\":1000,\"g\":false,\"ns\":[{\"n\":\"node0101\",\"a\":1,\"f\":3,\"dt\":5,\"t\":1000},{\"n\":\"node0102\",\"a\":2,\"f\":3,\"dt\":5,\"t\":1000}]},{\"n\":\"device02\",\"da\":2,\"pi\":1000,\"g\":false,\"ns\":[{\"n\":\"node0201\",\"a\":1,\"f\":3,\"dt\":5,\"t\":1000},{\"n\":\"node0202\",\"a\":2,\"f\":3,\"dt\":5,\"t\":1000}]}]", 0}, 
+        {"device_config", "[{\"n\":\"device01\",\"da\":1,\"pi\":1000,\"g\":false,\"ns\":[{\"n\":\"node0101\",\"a\":1,\"f\":3,\"dt\":5,\"t\":1000},{\"n\":\"node0102\",\"a\":2,\"f\":3,\"dt\":5,\"t\":1000}]},{\"n\":\"device02\",\"da\":2,\"pi\":1000,\"g\":false,\"ns\":[{\"n\":\"node0201\",\"a\":1,\"f\":3,\"dt\":5,\"t\":1000},{\"n\":\"node0202\",\"a\":2,\"f\":3,\"dt\":5,\"t\":1000}]}]", 0}, 
         {"system_config", "{\"username\":\"admin\",\"password\":\"admin\",\"server1\":\"2.vn.pool.ntp.org\",\"server2\":\"0.asia.pool.ntp.org\",\"server3\":\"1.asia.pool.ntp.org\",\"timezone\":21,\"enabled\":true,\"port\":8000}", 0}, 
         {"boot_count", &boot_count, sizeof(boot_count)}, 
 };

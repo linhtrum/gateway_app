@@ -7,10 +7,10 @@
 #include <string.h>
 #include "agile_modbus.h"
 
-#define AGILE_MODBUS_MAX_ADU_LENGTH 256
-#define AGILE_MODBUS_RTU_TIMEOUT 1000
-#define AGLIE_MODBUS_POLLING_INTERVAL 1000
-#define AGILE_MODBUS_MAX_REGISTERS 125
+#define MODBUS_MAX_ADU_LENGTH 256
+#define MODBUS_RTU_TIMEOUT 1000
+#define MODBUS_POLLING_INTERVAL 1000
+#define MODBUS_MAX_REGISTERS 125
 
 // Error codes
 #define RTU_MASTER_OK          0
@@ -86,4 +86,5 @@ void rtu_master_poll(agile_modbus_t *ctx,int fd, device_t *config);
 device_t *get_device_config(void);
 void free_device_config(device_t *config);
 void start_rtu_master(void);
+
 #endif

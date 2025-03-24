@@ -349,6 +349,10 @@ function Devices() {
     switch (name) {
       case "n":
         error = validateNodeName(value);
+        if (!error && value && !isNodeNameUniqueAcrossDevices(value)) {
+          error =
+            "A node with this name already exists in any device. Please use a unique name.";
+        }
         break;
       case "t":
         error = validateTimeout(value);
@@ -421,6 +425,7 @@ function Devices() {
       pi: 1000,
       g: false,
     });
+    setIsAddingDevice(false);
   };
 
   const handleNodeSubmit = (e) => {
@@ -433,6 +438,14 @@ function Devices() {
 
     if (nameError || timeoutError) {
       alert(nameError || timeoutError);
+      return;
+    }
+
+    // Check if node name is unique across all devices
+    if (!isNodeNameUniqueAcrossDevices(newNode.n)) {
+      alert(
+        "A node with this name already exists in any device. Please use a unique name."
+      );
       return;
     }
 
@@ -470,6 +483,7 @@ function Devices() {
       dt: 1, // Reset to default numeric value
       t: 1000,
     });
+    setIsAddingNode(false);
   };
 
   const deleteDevice = (index) => {
@@ -608,10 +622,21 @@ function Devices() {
   const handleEditNodeInputChange = (e) => {
     const { name, value } = e.target;
 
-    // Add validation for name length
-    if (name === "n" && value.length > CONFIG.MAX_NAME_LENGTH) {
-      alert(`Node name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`);
-      return;
+    // Add validation for name length and uniqueness
+    if (name === "n") {
+      if (value.length > CONFIG.MAX_NAME_LENGTH) {
+        alert(`Node name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`);
+        return;
+      }
+      if (
+        value &&
+        !isNodeNameUniqueAcrossDevices(value, selectedDevice, editingNodeIndex)
+      ) {
+        alert(
+          "A node with this name already exists in any device. Please use a unique name."
+        );
+        return;
+      }
     }
 
     // Handle function code changes
@@ -696,6 +721,101 @@ function Devices() {
   const cancelNodeEdit = () => {
     setEditingNodeIndex(null);
     setEditingNode(null);
+  };
+
+  // Add new function to generate unique device name
+  const generateUniqueDeviceName = () => {
+    let baseName = "Device";
+    let counter = 1;
+    let newName = `${baseName}${counter}`;
+
+    while (!isDeviceNameUnique(newName)) {
+      counter++;
+      newName = `${baseName}${counter}`;
+    }
+
+    return newName;
+  };
+
+  // Add new function to generate unique node name
+  const generateUniqueNodeName = (deviceIndex) => {
+    let baseName = "Node";
+    let counter = 1;
+    let newName = `${baseName}${counter}`;
+
+    while (!isNodeNameUnique(newName, deviceIndex)) {
+      counter++;
+      newName = `${baseName}${counter}`;
+    }
+
+    return newName;
+  };
+
+  // Update handleAddDevice to use unique name
+  const handleAddDevice = () => {
+    if (devices.length >= CONFIG.MAX_DEVICES) {
+      alert(
+        `Maximum number of devices (${CONFIG.MAX_DEVICES}) reached. Cannot add more devices.`
+      );
+      return;
+    }
+
+    const uniqueName = generateUniqueDeviceName();
+    setNewDevice({
+      n: uniqueName,
+      da: 1,
+      pi: 1000,
+      g: false,
+    });
+    setIsAddingDevice(true);
+  };
+
+  // Update handleAddNode to use unique name
+  const handleAddNode = () => {
+    if (selectedDevice === null) {
+      alert("Please select a device first");
+      return;
+    }
+
+    if (totalNodes >= CONFIG.MAX_TOTAL_NODES) {
+      alert(
+        `Maximum total number of nodes (${CONFIG.MAX_TOTAL_NODES}) reached across all devices. Cannot add more nodes.`
+      );
+      return;
+    }
+
+    const uniqueName = generateUniqueNodeName(selectedDevice);
+    setNewNode({
+      n: uniqueName,
+      a: 1,
+      f: 1,
+      dt: 1,
+      t: 1000,
+    });
+    setIsAddingNode(true);
+  };
+
+  // Add new function to handle cancel add device
+  const handleCancelAddDevice = () => {
+    setIsAddingDevice(false);
+    setNewDevice({
+      n: "",
+      da: 1,
+      pi: 1000,
+      g: false,
+    });
+  };
+
+  // Add new function to handle cancel add node
+  const handleCancelAddNode = () => {
+    setIsAddingNode(false);
+    setNewNode({
+      n: "",
+      a: 1,
+      f: 1,
+      dt: 1,
+      t: 1000,
+    });
   };
 
   useEffect(() => {
@@ -800,11 +920,13 @@ function Devices() {
                   </span>
                 </h2>
                 <${Button}
-                  onClick=${() => setIsAddingDevice(!isAddingDevice)}
+                  onClick=${handleAddDevice}
+                  disabled=${isAddingDevice ||
+                  devices.length >= CONFIG.MAX_DEVICES}
                   variant="primary"
                   icon="PlusIcon"
                 >
-                  ${isAddingDevice ? "Cancel" : "Add New Device"}
+                  Add New Device
                 <//>
               </div>
 
@@ -905,14 +1027,20 @@ function Devices() {
                         </div>
                       </div>
                     </div>
-                    <div class="flex justify-end mt-4">
-                      <${Button}
-                        onClick=${handleSubmit}
-                        variant="primary"
-                        icon="SaveIcon"
+                    <div class="flex justify-end space-x-3 mt-4">
+                      <button
+                        type="button"
+                        onClick=${handleCancelAddDevice}
+                        class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
                       >
-                        Add Device
-                      <//>
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Save
+                      </button>
                     </div>
                   </form>
                 </div>
@@ -1071,11 +1199,13 @@ function Devices() {
                       </span>
                     </h2>
                     <${Button}
-                      onClick=${() => setIsAddingNode(!isAddingNode)}
+                      onClick=${handleAddNode}
+                      disabled=${isAddingNode ||
+                      totalNodes >= CONFIG.MAX_TOTAL_NODES}
                       variant="primary"
                       icon="PlusIcon"
                     >
-                      ${isAddingNode ? "Cancel" : "Add New Node"}
+                      Add New Node
                     <//>
                   </div>
 
@@ -1198,14 +1328,20 @@ function Devices() {
                           />
                         </div>
                       </div>
-                      <div class="flex justify-end mt-4">
-                        <${Button}
-                          onClick=${handleNodeSubmit}
-                          variant="primary"
-                          icon="SaveIcon"
+                      <div class="flex justify-end space-x-3 mt-4">
+                        <button
+                          type="button"
+                          onClick=${handleCancelAddNode}
+                          class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
                         >
-                          Add Node
-                        <//>
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
                       </div>
                     </form>
                   `}

@@ -181,7 +181,7 @@ static node_t* parse_nodes(cJSON *nodes_array) {
         if (timeout) {
             new_node->timeout = timeout->valueint;
         } else {
-            new_node->timeout = AGILE_MODBUS_RTU_TIMEOUT; // Default timeout of 1 second
+            new_node->timeout = MODBUS_RTU_TIMEOUT; // Default timeout of 1 second
         }
 
         if (!head) {
@@ -259,7 +259,7 @@ static void create_node_groups(device_t *device) {
     while (current) {
         if (!current_group || 
             current_group->function != current->function ||
-            (current->address - current_group->start_address + get_register_count(current->data_type)) > AGILE_MODBUS_MAX_REGISTERS) {
+            (current->address - current_group->start_address + get_register_count(current->data_type)) > MODBUS_MAX_REGISTERS) {
             
             // Create new group
             node_group_t *new_group = calloc(1, sizeof(node_group_t));
@@ -465,7 +465,7 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
 
     // Read response
     int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, 
-                             AGILE_MODBUS_RTU_TIMEOUT);
+                             MODBUS_RTU_TIMEOUT);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
                  group->function, group->start_address);
@@ -549,11 +549,11 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
                     break;
                 case DATA_TYPE_FLOAT_ABCD:
                 case DATA_TYPE_FLOAT_CDAB:
-                    DBG_INFO("Device: %s, Node: %s, Value: %f", 
+                    DBG_INFO("Device: %s, Node: %s, Value: %.6f", 
                             device->name, node->name, node->value.float_val);
                     break;
                 case DATA_TYPE_DOUBLE:
-                    DBG_INFO("Device: %s, Node: %s, Value: %lf", 
+                    DBG_INFO("Device: %s, Node: %s, Value: %.12lf", 
                             device->name, node->name, node->value.double_val);
                     break;
             }
@@ -570,7 +570,7 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
 device_t* get_device_config(void) {
     device_t *head = NULL;
     device_t *current = NULL;
-    char json_str[32*4096] = {0}; // Adjust size as needed
+    char json_str[8*4096] = {0}; // Adjust size as needed
 
     // Read JSON string from database
     int read_len = db_read("device_config", json_str, sizeof(json_str));
@@ -611,7 +611,7 @@ device_t* get_device_config(void) {
         if (polling_interval) {
             new_device->polling_interval = polling_interval->valueint;
         } else {
-            new_device->polling_interval = AGLIE_MODBUS_POLLING_INTERVAL;
+            new_device->polling_interval = MODBUS_POLLING_INTERVAL;
         }
         if (group_mode) {
             new_device->group_mode = group_mode->valueint != 0;
@@ -705,7 +705,7 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
             while (current_group) {
                 int result = poll_group_node(ctx, fd, current_device, current_group);
                 if (result != RTU_MASTER_OK) {
-                    DBG_ERROR("Failed to poll group %s (error: %d)", 
+                    DBG_ERROR("Failed to poll group %d (error: %d)", 
                              current_group->function, result);
                 }
                 // Sleep after each group poll
@@ -733,8 +733,8 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
 
 static void *rtu_master_thread(void *arg) {
     int fd;
-    uint8_t master_send_buf[AGILE_MODBUS_MAX_ADU_LENGTH];
-    uint8_t master_recv_buf[AGILE_MODBUS_MAX_ADU_LENGTH];
+    uint8_t master_send_buf[MODBUS_MAX_ADU_LENGTH];
+    uint8_t master_recv_buf[MODBUS_MAX_ADU_LENGTH];
 
     agile_modbus_rtu_t ctx_rtu;
     agile_modbus_t *ctx = &ctx_rtu._ctx;

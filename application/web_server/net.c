@@ -638,7 +638,7 @@ static bool write_card_config(const char *json_str) {
 
 static char* read_card_config(void) {
     char *json_str = NULL;
-    size_t buf_size = 16*4096;  // Initial buffer size
+    size_t buf_size = 8*4096;  // Initial buffer size
     
     // Allocate initial buffer
     json_str = calloc(1, buf_size);

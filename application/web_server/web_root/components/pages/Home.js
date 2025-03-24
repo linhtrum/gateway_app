@@ -286,43 +286,62 @@ function Home() {
     return date.toLocaleString();
   };
 
-  const handleAddCard = () => {
+  // Add new function to handle initial Add Card button click
+  const handleAddCardClick = () => {
     if (displayCards.length >= 200) {
       alert("Maximum limit of 200 cards reached. Cannot add more cards.");
       return;
     }
+    setIsAddingCard(true);
+  };
+
+  const handleAddCard = () => {
+    // Validate required fields
+    if (
+      !newCardConfig.t ||
+      !newCardConfig.di ||
+      !newCardConfig.ti ||
+      !newCardConfig.hi
+    ) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    // Validate device and node selections
+    if (!devices[parseInt(newCardConfig.di)]) {
+      alert("Please select a valid device");
+      return;
+    }
+
+    const device = devices[parseInt(newCardConfig.di)];
+    if (
+      !device.ns[parseInt(newCardConfig.ti)] ||
+      !device.ns[parseInt(newCardConfig.hi)]
+    ) {
+      alert("Please select valid temperature and humidity nodes");
+      return;
+    }
+
     setDisplayCards((prev) => [
       ...prev,
       {
-        t: "New Card",
-        dn: devices[parseInt(newCardConfig.di)].n,
+        t: newCardConfig.t,
+        dn: device.n,
         tn: {
-          n: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
-            .n,
-          a: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
-            .a,
-          f: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
-            .f,
-          dt: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
-            .dt,
-          t: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
-            .t,
-          v: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.ti)]
-            .value,
+          n: device.ns[parseInt(newCardConfig.ti)].n,
+          a: device.ns[parseInt(newCardConfig.ti)].a,
+          f: device.ns[parseInt(newCardConfig.ti)].f,
+          dt: device.ns[parseInt(newCardConfig.ti)].dt,
+          t: device.ns[parseInt(newCardConfig.ti)].t,
+          v: device.ns[parseInt(newCardConfig.ti)].value,
         },
         hn: {
-          n: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
-            .n,
-          a: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
-            .a,
-          f: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
-            .f,
-          dt: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
-            .dt,
-          t: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
-            .t,
-          v: devices[parseInt(newCardConfig.di)].ns[parseInt(newCardConfig.hi)]
-            .value,
+          n: device.ns[parseInt(newCardConfig.hi)].n,
+          a: device.ns[parseInt(newCardConfig.hi)].a,
+          f: device.ns[parseInt(newCardConfig.hi)].f,
+          dt: device.ns[parseInt(newCardConfig.hi)].dt,
+          t: device.ns[parseInt(newCardConfig.hi)].t,
+          v: device.ns[parseInt(newCardConfig.hi)].value,
         },
         lastUpdate: new Date(),
       },
@@ -497,8 +516,8 @@ function Home() {
             Cards: ${displayCards.length}/200
           </span>
           <${Button}
-            onClick=${handleAddCard}
-            disabled=${displayCards.length >= 200}
+            onClick=${handleAddCardClick}
+            disabled=${displayCards.length >= 200 || isAddingCard}
             variant="primary"
             icon="PlusIcon"
           >
@@ -545,7 +564,13 @@ function Home() {
       html`
         <div class="mb-6 bg-white rounded-lg shadow-md p-6">
           <h2 class="text-lg font-semibold mb-4">Add New Display Card</h2>
-          <form onSubmit=${handleAddCard} class="space-y-4">
+          <form
+            onSubmit=${(e) => {
+              e.preventDefault();
+              handleAddCard();
+            }}
+            class="space-y-4"
+          >
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1"
@@ -562,6 +587,7 @@ function Home() {
                   maxlength="20"
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter card title (max 20 chars)"
+                  required
                 />
               </div>
               <div>
@@ -579,6 +605,7 @@ function Home() {
                     });
                   }}
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
                 >
                   <option value="">Select device</option>
                   ${devices.map(
@@ -601,6 +628,7 @@ function Home() {
                     })}
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled=${!newCardConfig.di}
+                  required
                 >
                   <option value="">Select temperature node</option>
                   ${newCardConfig.di !== "" &&
@@ -626,6 +654,7 @@ function Home() {
                     })}
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled=${!newCardConfig.di}
+                  required
                 >
                   <option value="">Select humidity node</option>
                   ${newCardConfig.di !== "" &&
@@ -651,7 +680,7 @@ function Home() {
                 type="submit"
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                Add Card
+                Save
               </button>
             </div>
           </form>
