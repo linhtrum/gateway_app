@@ -45,6 +45,11 @@ function Devices() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isAddingDevice, setIsAddingDevice] = useState(false);
   const [isAddingNode, setIsAddingNode] = useState(false);
+  const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [editingEventId, setEditingEventId] = useState(null);
+  const [eventError, setEventError] = useState("");
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
 
   // Form states
   const [newDevice, setNewDevice] = useState({
@@ -59,6 +64,19 @@ function Devices() {
     f: 1,
     dt: 1,
     t: 1000,
+  });
+  const [newEvent, setNewEvent] = useState({
+    name: "",
+    enabled: true,
+    triggerCondition: 1,
+    triggerPoint: "",
+    scanningCycle: 100,
+    minTriggerInterval: 1000,
+    upperThreshold: 20000,
+    lowerThreshold: 0,
+    triggerExecution: 1,
+    triggerAction: 1,
+    description: "",
   });
 
   // Edit states
@@ -78,6 +96,82 @@ function Devices() {
     () => (selectedDevice !== null ? devices[selectedDevice]?.ns || [] : []),
     [devices, selectedDevice]
   );
+
+  // Add trigger condition options
+  const TRIGGER_CONDITIONS = [
+    [1, "Forward Follow"],
+    [2, "Reverse Follow"],
+    [3, ">="],
+    [4, "<="],
+    [5, "Within Threshold"],
+    [6, "Out of Threshold"],
+    [7, ">"],
+    [8, "<"],
+  ];
+
+  // Add trigger execution options
+  const TRIGGER_EXECUTIONS = [
+    [1, "DO1"],
+    [2, "DO2"],
+  ];
+
+  // Add trigger action options
+  const TRIGGER_ACTIONS = [
+    [1, "Normal Open(NO)"],
+    [2, "Normal Close(NC)"],
+    [3, "Flip"],
+  ];
+
+  // Add function to get all available nodes for trigger point selection
+  const getAllNodes = useMemo(() => {
+    const nodes = [];
+    devices.forEach((device) => {
+      device.ns?.forEach((node) => {
+        nodes.push({
+          value: `${device.n}.${node.n}`,
+          label: `${device.n} - ${node.n}`,
+        });
+      });
+    });
+    return nodes;
+  }, [devices]);
+
+  // Add function to determine which threshold fields should be shown
+  const getThresholdVisibility = useMemo(() => {
+    const condition = parseInt(newEvent.triggerCondition);
+    return {
+      showUpper: ![1, 2, 4, 8].includes(condition),
+      showLower: ![1, 2, 3, 7].includes(condition),
+    };
+  }, [newEvent.triggerCondition]);
+
+  // Add function to determine if trigger action should be shown
+  const showTriggerAction = useMemo(() => {
+    const condition = parseInt(newEvent.triggerCondition);
+    return ![1, 2].includes(condition);
+  }, [newEvent.triggerCondition]);
+
+  // Add function to get trigger condition label
+  const getTriggerConditionLabel = (condition) => {
+    const found = TRIGGER_CONDITIONS.find(
+      ([value]) => value === parseInt(condition)
+    );
+    return found ? found[1] : "";
+  };
+
+  // Add function to get trigger execution label
+  const getTriggerExecutionLabel = (execution) => {
+    const found = TRIGGER_EXECUTIONS.find(
+      ([value]) => value === parseInt(execution)
+    );
+    return found ? found[1] : "";
+  };
+
+  // Add function to get trigger action label
+  const getTriggerActionLabel = (action) => {
+    const found = TRIGGER_ACTIONS.find(([value]) => value === parseInt(action));
+    return found ? found[1] : "";
+  };
 
   const fetchDeviceConfig = async () => {
     try {
@@ -124,30 +218,7 @@ function Devices() {
       setSaveError("");
       setSaveSuccess(false);
 
-      // Validate configurations before saving
-      const invalidDevices = devices.filter(
-        (device) =>
-          !device.n || !device.da || !device.pi || !Array.isArray(device.ns)
-      );
-
-      if (invalidDevices.length > 0) {
-        throw new Error("Some devices have invalid configurations");
-      }
-
-      const config = devices.map((device) => ({
-        n: device.n,
-        da: device.da,
-        pi: device.pi,
-        g: device.g,
-        ns: device.ns.map((node) => ({
-          n: node.n,
-          a: node.a,
-          f: node.f,
-          dt: node.dt,
-          t: node.t,
-        })),
-      }));
-
+      // Save device configuration
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -156,7 +227,7 @@ function Devices() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(config),
+        body: JSON.stringify(devices),
         signal: controller.signal,
       });
 
@@ -165,6 +236,27 @@ function Devices() {
       if (!response.ok) {
         throw new Error(
           `Failed to save device configuration: ${response.statusText}`
+        );
+      }
+
+      // Save events configuration
+      const eventsController = new AbortController();
+      const eventsTimeoutId = setTimeout(() => eventsController.abort(), 10000);
+
+      const eventsResponse = await fetch("/api/event/set", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(events),
+        signal: eventsController.signal,
+      });
+
+      clearTimeout(eventsTimeoutId);
+
+      if (!eventsResponse.ok) {
+        throw new Error(
+          `Failed to save events configuration: ${eventsResponse.statusText}`
         );
       }
 
@@ -199,11 +291,11 @@ function Devices() {
         window.location.reload();
       }, 5000);
     } catch (error) {
-      console.error("Error saving device configuration:", error);
+      console.error("Error saving configuration:", error);
       setSaveError(
         error.name === "AbortError"
           ? "Request timed out. Please try again."
-          : error.message || "Failed to save device configuration"
+          : error.message || "Failed to save configuration"
       );
       setIsSaving(false);
     }
@@ -824,12 +916,193 @@ function Devices() {
     });
   };
 
+  // Add function to handle event input changes
+  const handleEventInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setNewEvent((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  // Add function to check if event name is unique
+  const isEventNameUnique = (name, excludeId = null) => {
+    return !events.some(
+      (event) =>
+        event.id !== excludeId &&
+        event.name.toLowerCase() === name.toLowerCase()
+    );
+  };
+
+  // Update handleEventSubmit to include validations
+  const handleEventSubmit = (e) => {
+    e.preventDefault();
+
+    // Validate required fields
+    if (!newEvent.name.trim()) {
+      setEventError("Event name is required");
+      return;
+    }
+    if (!newEvent.triggerPoint) {
+      setEventError("Trigger point is required");
+      return;
+    }
+    if (!newEvent.scanningCycle) {
+      setEventError("Scanning cycle is required");
+      return;
+    }
+    if (!newEvent.minTriggerInterval) {
+      setEventError("Minimum trigger interval is required");
+      return;
+    }
+
+    // Validate thresholds based on trigger condition
+    const condition = parseInt(newEvent.triggerCondition);
+    if ([3, 5, 6, 7].includes(condition) && !newEvent.upperThreshold) {
+      setEventError("Upper threshold is required for this trigger condition");
+      return;
+    }
+    if ([4, 5, 6, 8].includes(condition) && !newEvent.lowerThreshold) {
+      setEventError("Lower threshold is required for this trigger condition");
+      return;
+    }
+
+    // Check for unique event name
+    if (!isEventNameUnique(newEvent.name, editingEventId)) {
+      setEventError("An event with this name already exists");
+      return;
+    }
+
+    if (editingEventId) {
+      // Update existing event
+      setEvents((prev) =>
+        prev.map((event) =>
+          event.id === editingEventId
+            ? { ...newEvent, id: editingEventId }
+            : event
+        )
+      );
+    } else {
+      // Check event limit before adding new event
+      if (events.length >= 10) {
+        setEventError(
+          "Maximum number of events (10) reached. Cannot add more events."
+        );
+        return;
+      }
+      // Add new event
+      setEvents((prev) => [...prev, { ...newEvent, id: Date.now() }]);
+    }
+    setIsAddingEvent(false);
+    setEditingEventId(null);
+    setEventError("");
+    setNewEvent({
+      name: "",
+      enabled: true,
+      triggerCondition: 1,
+      triggerPoint: "",
+      scanningCycle: 1000,
+      minTriggerInterval: 1000,
+      upperThreshold: "",
+      lowerThreshold: "",
+      triggerExecution: 1,
+      triggerAction: 1,
+      description: "",
+    });
+  };
+
+  // Add function to start editing an event
+  const startEditingEvent = (event) => {
+    setEditingEventId(event.id);
+    setNewEvent({
+      name: event.name,
+      enabled: event.enabled,
+      triggerCondition: event.triggerCondition,
+      triggerPoint: event.triggerPoint,
+      scanningCycle: event.scanningCycle,
+      minTriggerInterval: event.minTriggerInterval,
+      upperThreshold: event.upperThreshold,
+      lowerThreshold: event.lowerThreshold,
+      triggerExecution: event.triggerExecution,
+      triggerAction: event.triggerAction,
+      description: event.description,
+    });
+    setIsAddingEvent(true);
+  };
+
+  // Update handleCancelAddEvent to handle edit mode
+  const handleCancelAddEvent = () => {
+    setIsAddingEvent(false);
+    setEditingEventId(null);
+    setNewEvent({
+      name: "",
+      enabled: true,
+      triggerCondition: 1,
+      triggerPoint: "",
+      scanningCycle: 1000,
+      minTriggerInterval: 1000,
+      upperThreshold: "",
+      lowerThreshold: "",
+      triggerExecution: 1,
+      triggerAction: 1,
+      description: "",
+    });
+  };
+
+  // Add function to delete event
+  const deleteEvent = (eventId) => {
+    if (confirm("Are you sure you want to delete this event?")) {
+      setEvents((prev) => prev.filter((event) => event.id !== eventId));
+    }
+  };
+
+  // Add function to fetch events
+  const fetchEvents = async () => {
+    try {
+      setIsLoadingEvents(true);
+      setEventError("");
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch("/api/event/get", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch events configuration: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      setEvents(data || []);
+    } catch (error) {
+      console.error("Error fetching events configuration:", error);
+      setEventError(
+        error.name === "AbortError"
+          ? "Request timed out. Please try again."
+          : error.message || "Failed to load events configuration"
+      );
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  };
+
+  // Update useEffect to fetch both device and event configurations
   useEffect(() => {
     document.title = "SBIOT-Devices";
     fetchDeviceConfig();
+    fetchEvents();
   }, []);
 
-  if (isLoading) {
+  if (isLoading || isLoadingEvents) {
     return html`
       <div class="p-6">
         <h1 class="text-2xl font-bold mb-6">Devices Management</h1>
@@ -838,7 +1111,7 @@ function Devices() {
         >
           <div class="flex items-center space-x-2">
             <${Icons.SpinnerIcon} className="h-5 w-5 text-blue-600" />
-            <span class="text-gray-600">Loading device configuration...</span>
+            <span class="text-gray-600">Loading configurations...</span>
           </div>
         </div>
       </div>
@@ -932,7 +1205,7 @@ function Devices() {
                   variant="primary"
                   icon="PlusIcon"
                 >
-                  Add New Device
+                  Add Device
                 <//>
               </div>
 
@@ -1197,7 +1470,7 @@ function Devices() {
               html`
                 <div class="mt-8">
                   <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-bold">
+                    <h2 class="text-xl font-semibold">
                       Node Details for ${devices[selectedDevice].n}
                       <span class="text-sm text-gray-500 font-normal">
                         (Device Nodes: ${selectedDeviceNodes.length}, Total
@@ -1211,7 +1484,7 @@ function Devices() {
                       variant="primary"
                       icon="PlusIcon"
                     >
-                      Add New Node
+                      Add Node
                     <//>
                   </div>
 
@@ -1510,85 +1783,413 @@ function Devices() {
         : html`
             <!-- Linkage Control Tab Content -->
             <div class="bg-white rounded-lg shadow-md p-6">
-              <h2 class="text-xl font-semibold mb-6">
-                Device Linkage Settings
-              </h2>
-
               <div class="space-y-6">
-                <!-- Linkage Rules Section -->
+                <!-- Events Section -->
                 <div>
-                  <h3 class="text-lg font-medium mb-4">Linkage Rules</h3>
-                  <div class="bg-gray-50 p-4 rounded-lg">
-                    <div class="flex items-center justify-between mb-4">
-                      <span class="text-sm font-medium text-gray-700"
-                        >Active Rules</span
-                      >
-                      <button
-                        class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                        onClick=${() => {
-                          // Add new rule logic here
-                        }}
-                      >
-                        Add Rule
-                      </button>
-                    </div>
-
-                    <div class="border rounded-lg bg-white">
-                      <div class="px-4 py-3 border-b">
-                        <div
-                          class="grid grid-cols-6 gap-4 text-sm font-medium text-gray-500"
-                        >
-                          <div>Source Device</div>
-                          <div>Source Node</div>
-                          <div>Condition</div>
-                          <div>Target Device</div>
-                          <div>Target Node</div>
-                          <div>Action</div>
-                        </div>
-                      </div>
-
-                      <div class="p-4 text-sm text-gray-500">
-                        No linkage rules configured yet.
-                      </div>
-                    </div>
+                  <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold">
+                      Events
+                      <span class="text-sm text-gray-500 font-normal">
+                        (${events.length}/10 events configured)
+                      </span>
+                    </h2>
+                    <${Button}
+                      onClick=${() => setIsAddingEvent(true)}
+                      variant="primary"
+                      icon="PlusIcon"
+                      disabled=${isAddingEvent}
+                    >
+                      Add Event
+                    <//>
                   </div>
-                </div>
 
-                <!-- Device Dependencies Section -->
-                <div>
-                  <h3 class="text-lg font-medium mb-4">Device Dependencies</h3>
+                  ${isAddingEvent &&
+                  html`
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                      <h4 class="text-lg font-semibold mb-4">
+                        ${editingEventId ? "Edit Event" : "Add New Event"}
+                      </h4>
+                      <form onSubmit=${handleEventSubmit} class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                          <div>
+                            <label
+                              class="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Event Name <span class="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              name="name"
+                              value=${newEvent.name}
+                              onChange=${handleEventInputChange}
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            />
+                          </div>
+                          <div class="flex items-center">
+                            <label class="flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                name="enabled"
+                                checked=${newEvent.enabled}
+                                onChange=${handleEventInputChange}
+                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              />
+                              <span class="ml-2 text-sm text-gray-700"
+                                >Enable Event</span
+                              >
+                            </label>
+                          </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                          <div>
+                            <label
+                              class="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Trigger Condition
+                            </label>
+                            <select
+                              name="triggerCondition"
+                              value=${newEvent.triggerCondition}
+                              onChange=${handleEventInputChange}
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              ${TRIGGER_CONDITIONS.map(
+                                ([value, label]) => html`
+                                  <option value=${value}>${label}</option>
+                                `
+                              )}
+                            </select>
+                          </div>
+                          <div>
+                            <label
+                              class="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Trigger Point
+                              <span class="text-red-500">*</span>
+                            </label>
+                            <select
+                              name="triggerPoint"
+                              value=${newEvent.triggerPoint}
+                              onChange=${handleEventInputChange}
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              disabled=${getAllNodes.length === 0}
+                              required
+                            >
+                              <option value="">Select a node</option>
+                              ${getAllNodes.map(
+                                (node) => html`
+                                  <option value=${node.value}>
+                                    ${node.label}
+                                  </option>
+                                `
+                              )}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                          <div>
+                            <label
+                              class="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Scanning Cycle (ms)
+                              <span class="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              name="scanningCycle"
+                              value=${newEvent.scanningCycle}
+                              onChange=${handleEventInputChange}
+                              min="0"
+                              max="10000"
+                              step="100"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label
+                              class="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Min Trigger Interval (ms)
+                              <span class="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              name="minTriggerInterval"
+                              value=${newEvent.minTriggerInterval}
+                              onChange=${handleEventInputChange}
+                              min="500"
+                              max="10000"
+                              step="100"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                          ${getThresholdVisibility.showUpper &&
+                          html`
+                            <div>
+                              <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                              >
+                                Upper Threshold
+                                <span class="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                name="upperThreshold"
+                                value=${newEvent.upperThreshold}
+                                onChange=${handleEventInputChange}
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Enter upper threshold"
+                                required=${[3, 5, 6, 7].includes(
+                                  parseInt(newEvent.triggerCondition)
+                                )}
+                              />
+                            </div>
+                          `}
+                          ${getThresholdVisibility.showLower &&
+                          html`
+                            <div>
+                              <label
+                                class="block text-sm font-medium text-gray-700 mb-1"
+                              >
+                                Lower Threshold
+                                <span class="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                name="lowerThreshold"
+                                value=${newEvent.lowerThreshold}
+                                onChange=${handleEventInputChange}
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Enter lower threshold"
+                                required=${[4, 5, 6, 8].includes(
+                                  parseInt(newEvent.triggerCondition)
+                                )}
+                              />
+                            </div>
+                          `}
+                        </div>
+
+                        <div>
+                          <label
+                            class="block text-sm font-medium text-gray-700 mb-1"
+                          >
+                            Trigger Execution
+                          </label>
+                          <select
+                            name="triggerExecution"
+                            value=${newEvent.triggerExecution}
+                            onChange=${handleEventInputChange}
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            ${TRIGGER_EXECUTIONS.map(
+                              ([value, label]) => html`
+                                <option value=${value}>${label}</option>
+                              `
+                            )}
+                          </select>
+                        </div>
+
+                        ${showTriggerAction &&
+                        html`
+                          <div>
+                            <label
+                              class="block text-sm font-medium text-gray-700 mb-1"
+                            >
+                              Trigger Action
+                            </label>
+                            <select
+                              name="triggerAction"
+                              value=${newEvent.triggerAction}
+                              onChange=${handleEventInputChange}
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              ${TRIGGER_ACTIONS.map(
+                                ([value, label]) => html`
+                                  <option value=${value}>${label}</option>
+                                `
+                              )}
+                            </select>
+                          </div>
+                        `}
+
+                        <div>
+                          <label
+                            class="block text-sm font-medium text-gray-700 mb-1"
+                          >
+                            Event Description
+                          </label>
+                          <textarea
+                            name="description"
+                            value=${newEvent.description}
+                            onChange=${handleEventInputChange}
+                            rows="3"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter event description"
+                          ></textarea>
+                        </div>
+
+                        <div class="flex justify-end space-x-3 mt-4">
+                          <button
+                            type="button"
+                            onClick=${handleCancelAddEvent}
+                            class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            ${editingEventId ? "Update" : "Save"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  `}
+
+                  <!-- Events List -->
                   <div class="bg-gray-50 p-4 rounded-lg">
-                    <div class="grid grid-cols-2 gap-4">
-                      <div>
-                        <h4 class="text-sm font-medium text-gray-700 mb-2">
-                          Source Devices
-                        </h4>
-                        <select
-                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">Select source device</option>
-                          ${devices.map(
-                            (device) => html`
-                              <option value=${device.n}>${device.n}</option>
-                            `
-                          )}
-                        </select>
+                    ${eventError &&
+                    html`
+                      <div
+                        class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded"
+                      >
+                        ${eventError}
                       </div>
-                      <div>
-                        <h4 class="text-sm font-medium text-gray-700 mb-2">
-                          Target Devices
-                        </h4>
-                        <select
-                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">Select target device</option>
-                          ${devices.map(
-                            (device) => html`
-                              <option value=${device.n}>${device.n}</option>
-                            `
-                          )}
-                        </select>
-                      </div>
+                    `}
+                    <div class="border rounded-lg bg-white">
+                      <table class="min-w-full divide-y divide-gray-200">
+                        <thead>
+                          <tr class="bg-gray-50">
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Name
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Status
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Condition
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Trigger Point
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Thresholds
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Scan Cycle
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Execution
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                          ${events.length === 0
+                            ? html`
+                                <tr>
+                                  <td
+                                    colspan="8"
+                                    class="px-4 py-3 text-sm text-gray-500 text-center"
+                                  >
+                                    No events configured yet.
+                                  </td>
+                                </tr>
+                              `
+                            : events.map(
+                                (event) => html`
+                                  <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${event.name}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                      <span
+                                        class=${`px-2 py-1 text-xs rounded-full ${
+                                          event.enabled
+                                            ? "bg-green-100 text-green-800"
+                                            : "bg-red-100 text-red-800"
+                                        }`}
+                                      >
+                                        ${event.enabled
+                                          ? "Enabled"
+                                          : "Disabled"}
+                                      </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${getTriggerConditionLabel(
+                                        event.triggerCondition
+                                      )}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${event.triggerPoint}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${event.upperThreshold &&
+                                      event.lowerThreshold
+                                        ? `${event.lowerThreshold} ~ ${event.upperThreshold}`
+                                        : event.upperThreshold
+                                        ? `> ${event.upperThreshold}`
+                                        : event.lowerThreshold
+                                        ? `< ${event.lowerThreshold}`
+                                        : "-"}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${event.scanningCycle}ms
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${getTriggerExecutionLabel(
+                                        event.triggerExecution
+                                      )}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                      <div class="flex space-x-2">
+                                        <button
+                                          onClick=${() =>
+                                            startEditingEvent(event)}
+                                          class="text-blue-600 hover:text-blue-900"
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick=${() => deleteEvent(event.id)}
+                                          class="text-red-600 hover:text-red-900"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                `
+                              )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
