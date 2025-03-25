@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
+# CFLAGS = -O2 -g
 INCLUDE = -I./packages/mongoose -I./packages/cJSON -I./application/web_server -I./packages/FlashDB/inc -I./packages/agile_modbus/inc -I./packages/agile_modbus/util -I./application/database -I./application/log -I./application/modbus -I./application/system -DMG_ENABLE_PACKED_FS=1
 LIB = -lpthread
 TARGET = app
@@ -31,6 +32,7 @@ run: clean all
 
 all: $(TARGET)
 	mv $(TARGET) out
+#	scp -r out root@192.168.1.6:/root/home/test
 	./out/$(TARGET)
 
 $(TARGET): $(OBJS)

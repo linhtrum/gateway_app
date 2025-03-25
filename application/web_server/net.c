@@ -220,36 +220,28 @@ static char* get_network_info(void) {
 
         // Get IP address
         struct sockaddr_in *addr = (struct sockaddr_in *)&item->ifr_addr;
-            char ip[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
+        
+        // Get netmask
+        struct ifreq ifr_mask;
+        strncpy(ifr_mask.ifr_name, item->ifr_name, IFNAMSIZ - 1);
+        if (ioctl(sockfd, SIOCGIFNETMASK, &ifr_mask) == 0) {
+            struct sockaddr_in *mask = (struct sockaddr_in *)&ifr_mask.ifr_netmask;
+            char netmask[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &mask->sin_addr, netmask, sizeof(netmask));
             
-            // Get netmask
-            struct ifreq ifr_mask;
-            strncpy(ifr_mask.ifr_name, item->ifr_name, IFNAMSIZ - 1);
-            if (ioctl(sockfd, SIOCGIFNETMASK, &ifr_mask) == 0) {
-                struct sockaddr_in *mask = (struct sockaddr_in *)&ifr_mask.ifr_netmask;
-                char netmask[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &mask->sin_addr, netmask, sizeof(netmask));
-                
-                cJSON_AddStringToObject(root, "if", item->ifr_name);
-                cJSON_AddStringToObject(root, "ip", ip);
-                cJSON_AddStringToObject(root, "sm", netmask);
-                found_interface = true;
-            } else {
-                cJSON_AddStringToObject(root, "error", "Failed to get eth0 netmask");
-                close(sockfd);
-                char *json_str = cJSON_PrintUnformatted(root);
-                cJSON_Delete(root);
-                return json_str;
-            }
-        // if (addr->sin_family == AF_INET) {
-        // } else {
-        //     cJSON_AddStringToObject(root, "error", "eth0 interface is not IPv4");
-        //     close(sockfd);
-        //     char *json_str = cJSON_PrintUnformatted(root);
-        //     cJSON_Delete(root);
-        //     return json_str;
-        // }
+            cJSON_AddStringToObject(root, "if", item->ifr_name);
+            cJSON_AddStringToObject(root, "ip", ip);
+            cJSON_AddStringToObject(root, "sm", netmask);
+            found_interface = true;
+        } else {
+            cJSON_AddStringToObject(root, "error", "Failed to get eth0 netmask");
+            close(sockfd);
+            char *json_str = cJSON_PrintUnformatted(root);
+            cJSON_Delete(root);
+            return json_str;
+        }
         break; // We found eth0, no need to continue
     }
 
@@ -299,25 +291,42 @@ static char* get_network_info(void) {
         cJSON_AddStringToObject(root, "gw", "");
     }
 
-    // Get DNS servers
+    // Get DNS servers from /etc/resolv.conf
     bool found_dns = false;
-    res_init();
-    if (_res.nscount > 0) {
-        struct sockaddr_in *ns = (struct sockaddr_in *)_res.nsaddr_list;
-        char dns1[INET_ADDRSTRLEN];
-        char dns2[INET_ADDRSTRLEN];
+    FILE *resolv_fp = fopen("/etc/resolv.conf", "r");
+    if (resolv_fp) {
+        char line[256];
+        char dns1[INET_ADDRSTRLEN] = "";
+        char dns2[INET_ADDRSTRLEN] = "";
         
-        inet_ntop(AF_INET, &ns[0].sin_addr, dns1, sizeof(dns1));
-        cJSON_AddStringToObject(root, "d1", dns1);
-        found_dns = true;
-        
-        if (_res.nscount > 1) {
-            inet_ntop(AF_INET, &ns[1].sin_addr, dns2, sizeof(dns2));
-            cJSON_AddStringToObject(root, "d2", dns2);
-        } else {
-            cJSON_AddStringToObject(root, "d2", "");
+        while (fgets(line, sizeof(line), resolv_fp)) {
+            // Remove trailing whitespace
+            line[strcspn(line, "\r\n")] = 0;
+            
+            // Look for nameserver entries
+            if (strncmp(line, "nameserver", 10) == 0) {
+                char *dns = line + 10;  // Skip "nameserver"
+                // Skip leading whitespace
+                while (*dns == ' ') dns++;
+                
+                if (!found_dns) {
+                    // First DNS server
+                    strncpy(dns1, dns, sizeof(dns1) - 1);
+                    found_dns = true;
+                } else {
+                    // Second DNS server
+                    strncpy(dns2, dns, sizeof(dns2) - 1);
+                    break;  // We only need two DNS servers
+                }
+            }
         }
+        fclose(resolv_fp);
+        
+        // Add DNS servers to JSON
+        cJSON_AddStringToObject(root, "d1", dns1);
+        cJSON_AddStringToObject(root, "d2", dns2);
     } else {
+        // If can't read resolv.conf, add empty DNS servers
         cJSON_AddStringToObject(root, "d1", "");
         cJSON_AddStringToObject(root, "d2", "");
     }
@@ -339,11 +348,12 @@ static char* get_network_info(void) {
                 in_network_section = false;
             }
             
-            // In [Network] section, look for DHCP=yes
+            // In [Network] section, only enable DHCP if exactly "DHCP=yes"
             if (in_network_section && strcmp(line, "DHCP=yes") == 0) {
                 dhcp_enabled = true;
                 break;
             }
+            // Any other DHCP setting (DHCP=no, DHCP=ipv4, etc) means DHCP is disabled
         }
         fclose(network_fp);
     }
@@ -352,165 +362,63 @@ static char* get_network_info(void) {
     close(sockfd);
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    DBG_INFO("Network info: %s", json_str);
     return json_str;
 }
 
-static bool apply_network_config(const char *json_str) {
-    cJSON *root = cJSON_Parse(json_str);
-    if (!root) {
+static bool restart_network(void) {
+    DBG_INFO("Restarting network service");
+    
+    // Restart systemd-networkd service
+    int ret = system("systemctl restart systemd-networkd");
+    if (ret != 0) {
+        DBG_ERROR("Failed to restart systemd-networkd service");
         return false;
     }
 
-    // Create socket for ioctl
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        cJSON_Delete(root);
-        return false;
-    }
-
-    bool success = true;
-    struct ifreq ifr;
-    memset(&ifr, 0, sizeof(ifr));
-    strncpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
-
-    // Get current interface flags
-    if (ioctl(sockfd, SIOCGIFFLAGS, &ifr) < 0) {
-        close(sockfd);
-        cJSON_Delete(root);
-        return false;
-    }
-
-    // Bring interface down before configuration
-    ifr.ifr_flags &= ~IFF_UP;
-    if (ioctl(sockfd, SIOCSIFFLAGS, &ifr) < 0) {
-        close(sockfd);
-        cJSON_Delete(root);
-        return false;
-    }
-
-    // Configure IP address
-    cJSON *ip = cJSON_GetObjectItem(root, "ip");
-    cJSON *sm = cJSON_GetObjectItem(root, "sm");
-    if (ip && sm) {
-        struct sockaddr_in *addr = (struct sockaddr_in *)&ifr.ifr_addr;
-        addr->sin_family = AF_INET;
-        if (inet_pton(AF_INET, ip->valuestring, &addr->sin_addr) != 1) {
-            success = false;
-        } else {
-            if (ioctl(sockfd, SIOCSIFADDR, &ifr) < 0) {
-                success = false;
-            }
+    // Wait for network to be up (max 5 seconds)
+    int retries = 5;
+    while (retries > 0) {
+        ret = system("ip link show eth0 | grep -q 'state UP'");
+        if (ret == 0) {
+            DBG_INFO("Network interface eth0 is up");
+            return true;
         }
-
-        // Configure netmask
-        struct ifreq ifr_mask;
-        memset(&ifr_mask, 0, sizeof(ifr_mask));
-        strncpy(ifr_mask.ifr_name, "eth0", IFNAMSIZ - 1);
-        struct sockaddr_in *mask = (struct sockaddr_in *)&ifr_mask.ifr_netmask;
-        mask->sin_family = AF_INET;
-        if (inet_pton(AF_INET, sm->valuestring, &mask->sin_addr) != 1) {
-            success = false;
-        } else {
-            if (ioctl(sockfd, SIOCSIFNETMASK, &ifr_mask) < 0) {
-                success = false;
-            }
-        }
+        sleep(1);
+        retries--;
     }
 
-    // Configure default gateway
-    cJSON *gw = cJSON_GetObjectItem(root, "gw");
-    if (gw && gw->valuestring[0] != '\0') {
-        struct rtentry rt;
-        memset(&rt, 0, sizeof(rt));
-        struct sockaddr_in *addr = (struct sockaddr_in *)&rt.rt_gateway;
-        addr->sin_family = AF_INET;
-        if (inet_pton(AF_INET, gw->valuestring, &addr->sin_addr) != 1) {
-            success = false;
-        } else {
-            // Delete existing default route
-            struct rtentry rt_old;
-            memset(&rt_old, 0, sizeof(rt_old));
-            if (ioctl(sockfd, SIOCDELRT, &rt_old) < 0) {
-                // Ignore error as route might not exist
-            }
-            // Add new default route
-            if (ioctl(sockfd, SIOCADDRT, &rt) < 0) {
-                success = false;
-            }
-        }
+    DBG_ERROR("Network interface eth0 failed to come up");
+    return false;
+}
+
+
+static char* read_network_config(void) {
+    char *json_str = NULL;
+    size_t buf_size = 4096;  // Initial buffer size
+    
+    // Allocate initial buffer
+    json_str = calloc(1, buf_size);
+    if (!json_str) {
+        DBG_ERROR("Failed to allocate memory for network config");
+        return NULL;
     }
 
-    // Configure DNS servers
-    cJSON *d1 = cJSON_GetObjectItem(root, "d1");
-    cJSON *d2 = cJSON_GetObjectItem(root, "d2");
-    if (d1 || d2) {
-        FILE *resolv_fp = fopen("/etc/resolv.conf", "w");
-        if (resolv_fp) {
-            if (d1 && d1->valuestring[0] != '\0') {
-                fprintf(resolv_fp, "nameserver %s\n", d1->valuestring);
-            }
-            if (d2 && d2->valuestring[0] != '\0') {
-                fprintf(resolv_fp, "nameserver %s\n", d2->valuestring);
-            }
-            fclose(resolv_fp);
-        } else {
-            success = false;
-        }
+    // Read network config from database
+    int read_len = db_read("network_config", json_str, buf_size);
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read network config from database");
+        free(json_str);
+        return NULL;
     }
 
-    // Configure DHCP
-    cJSON *dh = cJSON_GetObjectItem(root, "dh");
-    if (dh) {
-        // Write systemd network configuration
-        FILE *network_fp = fopen("/lib/systemd/network/80-wired.network", "w");
-        if (network_fp) {
-            fprintf(network_fp, "[Match]\n");
-            fprintf(network_fp, "Name=eth0\n\n");
-            fprintf(network_fp, "[Network]\n");
-            
-            if (dh->type == cJSON_True) {
-                // Enable DHCP
-                fprintf(network_fp, "DHCP=yes\n\n");
-                fprintf(network_fp, "[DHCP]\n");
-                fprintf(network_fp, "RouteMetric=10\n");
-                fprintf(network_fp, "ClientIdentifier=mac\n");
-            } else if (dh->type == cJSON_False) {
-                // Disable DHCP and use static configuration
-                fprintf(network_fp, "DHCP=no\n");
-                fprintf(network_fp, "Address=%s/%s\n", 
-                    cJSON_GetObjectItem(root, "ip")->valuestring,
-                    cJSON_GetObjectItem(root, "sm")->valuestring);
-                fprintf(network_fp, "Gateway=%s\n", 
-                    cJSON_GetObjectItem(root, "gw")->valuestring);
-            }
-            
-            fclose(network_fp);
-        } else {
-            success = false;
-        }
-    }
-
-    // Bring interface up
-    ifr.ifr_flags |= IFF_UP;
-    if (ioctl(sockfd, SIOCSIFFLAGS, &ifr) < 0) {
-        success = false;
-    }
-
-    close(sockfd);
-    cJSON_Delete(root);
-    return success;
+    DBG_INFO("Network config read from database successfully");
+    return json_str;
 }
 
 static bool write_network_config(const char *json_str) {
     if (!json_str) {
         DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    // First write to database
-    int result = db_write("network_config", (void*)json_str, strlen(json_str) + 1);
-    if (result != 0) {
-        DBG_ERROR("Failed to write network config to database");
         return false;
     }
 
@@ -547,6 +455,8 @@ static bool write_network_config(const char *json_str) {
         cJSON *ip = cJSON_GetObjectItem(root, "ip");
         cJSON *sm = cJSON_GetObjectItem(root, "sm");
         cJSON *gw = cJSON_GetObjectItem(root, "gw");
+        cJSON *d1 = cJSON_GetObjectItem(root, "d1");
+        cJSON *d2 = cJSON_GetObjectItem(root, "d2");
         
         if (ip && sm) {
             // Convert netmask to CIDR notation
@@ -573,8 +483,16 @@ done_cidr:
             fprintf(fp, "Address=%s/%d\n", ip->valuestring, cidr);
         }
         
-        if (gw) {
+        if (gw && gw->valuestring[0] != '\0') {
             fprintf(fp, "Gateway=%s\n", gw->valuestring);
+        }
+
+        // Add DNS servers in Network section
+        if (d1 && d1->valuestring && d1->valuestring[0] != '\0') {
+            fprintf(fp, "DNS=%s\n", d1->valuestring);
+        }
+        if (d2 && d2->valuestring && d2->valuestring[0] != '\0') {
+            fprintf(fp, "DNS=%s\n", d2->valuestring);
         }
         fprintf(fp, "\n");
     }
@@ -584,36 +502,65 @@ done_cidr:
     fprintf(fp, "RouteMetric=10\n");
     fprintf(fp, "ClientIdentifier=mac\n");
 
-    // Close file
+    // Close network config file
     fclose(fp);
+
+    // Write DNS configuration to resolv.conf
+    FILE *resolv_fp = fopen("/etc/resolv.conf", "w");
+    if (!resolv_fp) {
+        DBG_ERROR("Failed to open resolv.conf");
+        cJSON_Delete(root);
+        return false;
+    }
+
+    // Get DNS servers from JSON
+    cJSON *d1 = cJSON_GetObjectItem(root, "d1");
+    cJSON *d2 = cJSON_GetObjectItem(root, "d2");
+
+    // Write DNS servers if they exist and are not empty
+    if (d1 && d1->valuestring && d1->valuestring[0] != '\0') {
+        fprintf(resolv_fp, "nameserver %s\n", d1->valuestring);
+    }
+    if (d2 && d2->valuestring && d2->valuestring[0] != '\0') {
+        fprintf(resolv_fp, "nameserver %s\n", d2->valuestring);
+    }
+
+    fclose(resolv_fp);
     cJSON_Delete(root);
 
-    DBG_INFO("Network config written successfully");
+    DBG_INFO("Network config written and applied successfully");
     return true;
 }
 
-static char* read_network_config(void) {
-    char *json_str = NULL;
-    size_t buf_size = 16*4096;  // Initial buffer size
-    
-    // Allocate initial buffer
-    json_str = calloc(1, buf_size);
-    if (!json_str) {
-        DBG_ERROR("Failed to allocate memory for network config");
-        return NULL;
-    }
-
+bool apply_network_config(void) {
     // Read network config from database
-    int read_len = db_read("network_config", json_str, buf_size);
-    if (read_len <= 0) {
+    char *json_str = read_network_config();
+    if (!json_str) {
         DBG_ERROR("Failed to read network config from database");
-        free(json_str);
-        return NULL;
+        return false;
     }
 
-    DBG_INFO("Network config read from database successfully");
-    return json_str;
+    // Write network config to system
+    bool success = write_network_config(json_str);
+    free(json_str);
+
+    if (!success) {
+        DBG_ERROR("Failed to write network config");
+        return false;
+    }
+
+    // Restart network to apply changes
+    if (!restart_network()) {
+        DBG_ERROR("Failed to restart network");
+        return false;
+    }
+
+    DBG_INFO("Network config applied successfully");
+    return true;
 }
+
+
+
 
 static bool write_system_config(const char *json_str) {
     if (!json_str) {
@@ -759,12 +706,37 @@ static void handle_system_get(struct mg_connection *c) {
 
 static void handle_network_get(struct mg_connection *c) {
     char *json_str = read_network_config();
-    if (json_str) {
+    if (!json_str) {
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+
+    // Parse JSON to check DHCP status
+    cJSON *root = cJSON_Parse(json_str);
+    if (!root) {
         mg_http_reply(c, 200, s_json_header, "%s", json_str);
         free(json_str);
-    } else {
-        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
     }
+
+    // Check DHCP status
+    cJSON *dhcp = cJSON_GetObjectItem(root, "dh");
+    if (dhcp && cJSON_IsTrue(dhcp)) {
+        // DHCP is enabled, get current network config from system
+        char *current_config = get_network_info();
+        if (current_config) {
+            mg_http_reply(c, 200, s_json_header, "%s", current_config);
+            free(current_config);
+            cJSON_Delete(root);
+            free(json_str);
+            return;
+        }
+    }
+
+    // If DHCP is disabled or any error occurred, return original config
+    mg_http_reply(c, 200, s_json_header, "%s", json_str);
+    cJSON_Delete(root);
+    free(json_str);
 }
 
 static void handle_network_set(struct mg_connection *c, struct mg_http_message *hm) {
@@ -776,14 +748,15 @@ static void handle_network_set(struct mg_connection *c, struct mg_http_message *
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = write_network_config(json_str);
-    free(json_str);
-    
-    if (success) {
-        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
-    } else {
-        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply network configuration\"}");
+    int result = db_write("network_config", (void*)json_str, strlen(json_str) + 1);
+    if (result != 0) {
+        DBG_ERROR("Failed to write network config to database");
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to write network config to database\"}");
     }
+    else {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    }
+    free(json_str);
 }
 
 static void handle_system_set(struct mg_connection *c, struct mg_http_message *hm) {
@@ -854,10 +827,18 @@ static void handle_card_get(struct mg_connection *c) {
 }
 
 static void handle_reboot_set(struct mg_connection *c, struct mg_http_message *hm) {
-    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");  
+    DBG_INFO("Reboot requested");
+    
+    // Send success response first
+    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    
+    // Schedule application restart with correct service name
+    system("sleep 1 && systemctl restart myapp.service");
 }
 
 static void handle_factory_reset_set(struct mg_connection *c, struct mg_http_message *hm) {
+    DBG_INFO("Factory reset");
+    db_clear();
     mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
 }
 
@@ -883,7 +864,7 @@ static bool get_http_config(char *url, size_t url_size, int *port) {
     }
 
     // Get HTTP port from config
-    cJSON *http_port = cJSON_GetObjectItem(root, "port");
+    cJSON *http_port = cJSON_GetObjectItem(root, "hport");
 
     // Always use default HTTP URL
     strncpy(url, DEFAULT_HTTP_URL, url_size - 1);
@@ -962,7 +943,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         else if (mg_match(hm->uri, mg_str("/api/reboot/set"), NULL)) {
             handle_reboot_set(c, hm);
         }
-        else if (mg_match(hm->uri, mg_str("/api/factory-reset/set"), NULL)) {
+        else if (mg_match(hm->uri, mg_str("/api/factory/set"), NULL)) {
             handle_factory_reset_set(c, hm);
         }
         else {

@@ -24,9 +24,9 @@ const CONFIG = {
 
 function Network() {
   // State management
-  const [networkConfig, setNetworkConfig] = useState(CONFIG.DEFAULT_NETWORK);
+  const [networkConfig, setNetworkConfig] = useState({});
   const [isEditing, setIsEditing] = useState(false);
-  const [editConfig, setEditConfig] = useState(CONFIG.DEFAULT_NETWORK);
+  const [editConfig, setEditConfig] = useState({});
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");

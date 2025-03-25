@@ -10,6 +10,7 @@
 #include "db.h"
 #include "../web_server/net.h"
 #include "../web_server/websocket.h"
+#include "../log/log_output.h"
 
 #define DBG_TAG "RTU_MASTER"
 #define DBG_LVL LOG_INFO
@@ -30,6 +31,8 @@ static void create_node_groups(device_t *device);
 static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_t *node);
 static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group);
 static char* build_node_json(const char *node_name, node_t *node);
+
+static uint8_t method_ws_log = 0; 
 
 // Free memory for a node and its members
 static void free_node(node_t *node) {
@@ -389,8 +392,11 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     if (read_len > 0) {
-        // Send hex string of response data
-        send_hex_string(ctx->read_buf, read_len);
+        if(method_ws_log == 1)
+        {
+            // Send hex string of response data
+            send_hex_string(ctx->read_buf, read_len);
+        }
 
         // Process response based on function code
         switch(node->function) {
@@ -517,8 +523,11 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     if (read_len > 0) {
-        // Send hex string of response data
-        send_hex_string(ctx->read_buf, read_len);
+        if(method_ws_log == 1)
+        {
+            // Send hex string of response data
+            send_hex_string(ctx->read_buf, read_len);
+        }
 
         // Process response based on function code
         switch(group->function) {
@@ -879,6 +888,8 @@ static void *rtu_master_thread(void *arg) {
     }
 
     DBG_INFO("RTU master polling thread started");
+
+    method_ws_log = get_log_method();
 
     // Run continuously
     while (1) {

@@ -9,6 +9,9 @@
 #include <pthread.h>
 #include "dbg.h"  // For log level definitions
 #include "net.h"
+#include "websocket.h"
+#include "cJSON.h"
+
 // Static buffers to avoid stack allocations
 static char g_time_str[20];
 static char g_output_buffer[LOG_BUFFER_SIZE];
@@ -136,10 +139,8 @@ void log_output_process(void) {
             // WebSocket output will be handled by the web server
             // This is just a placeholder for future implementation
             // Send log message to web thread for websocket broadcast
-            struct thread_data *p = get_thread_data();
-            if (p) {
-                mg_wakeup(p->mgr, p->conn_id, g_output_buffer, strlen(g_output_buffer) - 1);
-            }
+            g_output_buffer[strlen(g_output_buffer) - 1] = '\0';
+            websocket_log_send(g_output_buffer);
         }
         
         pthread_mutex_unlock(&g_output_mutex);
@@ -156,13 +157,43 @@ static void *log_thread_func(void* arg) {
     return NULL;
 }
 
+int get_log_method(void) {
+    char json_str[1024] = {0};
+    int log_method = 0;  // Default log method
+    
+    // Read JSON string from database
+    int read_len = db_read("system_config", json_str, sizeof(json_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read system config from database");
+        return log_method;  // Return default method
+    }
+
+    cJSON *root = cJSON_Parse(json_str);
+    if (!root) {
+        DBG_ERROR("Failed to parse system config JSON");
+        return log_method;  // Return default method
+    }
+
+    // Get logMethod value
+    cJSON *log_method_obj = cJSON_GetObjectItem(root, "logMethod");
+    if (log_method_obj && cJSON_IsNumber(log_method_obj)) {
+        log_method = log_method_obj->valueint;
+        DBG_INFO("Log method loaded: %d", log_method);
+    } else {
+        DBG_WARN("Log method not found in config, using default: %d", log_method);
+    }
+
+    cJSON_Delete(root);
+    return log_method;
+}
+
 void log_output_start(void) {
     pthread_t thread;
     pthread_attr_t attr;
     
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    
+
     int ret = pthread_create(&thread, &attr, log_thread_func, NULL);
     if (ret != 0) {
         DBG_ERROR("Failed to create log output thread: %s", strerror(ret));

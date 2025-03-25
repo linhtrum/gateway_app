@@ -29,4 +29,7 @@ void log_output_format_entry(const log_entry_t* entry, char* output, size_t outp
 // Start log output thread
 void log_output_start(void);
 
+// Get log method
+int get_log_method(void);
+
 #endif // LOG_OUTPUT_H 

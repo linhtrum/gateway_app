@@ -184,10 +184,7 @@ static void *udp_server_thread(void *arg) {
         
         if (recv_len > 0) {
             buffer[recv_len] = '\0';
-
-            // DBG_INFO("Sent network info to %s", inet_ntoa(client_addr.sin_addr));
-
-            
+            DBG_INFO("Received message: %s", buffer);
             if (strcmp(buffer, "GET_NETWORK_INFO") == 0) {
                 char response[BUFFER_SIZE];
                 if (get_network_info(response, sizeof(response)) == 0) {

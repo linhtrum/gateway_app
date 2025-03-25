@@ -62,7 +62,7 @@ function Logs() {
 
   const getWebSocketUrl = () => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.hostname}:${wsPort}`;
+    return `${protocol}//${window.location.hostname}:${wsPort}/ws`;
   };
 
   const connectWebSocket = () => {
@@ -311,7 +311,7 @@ function Logs() {
                   <input
                     type="text"
                     value=${inputData}
-                    onChange=${(e) => handleInputChange(e.target.value)}
+                    onInput=${(e) => handleInputChange(e.target.value)}
                     class=${`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       !isHexValid ? "border-red-500" : "border-gray-300"
                     }`}

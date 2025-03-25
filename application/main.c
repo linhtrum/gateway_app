@@ -15,9 +15,11 @@
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
 
+static volatile int running = 1;
+
 static void signal_handler(int signo) {
-    DBG_INFO("Received signal %d, exiting...", signo);
-    exit(0);
+    DBG_INFO("Received signal %d, initiating shutdown...", signo);
+    running = 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -29,14 +31,21 @@ int main(int argc, char *argv[]) {
 
     // Initialize logging system
     log_buffer_init();
-    // log_output_init(LOG_OUTPUT_WEBSOCKET);  // Enable stdout (default) and serial output
 
     // Setup signal handling
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
+    signal(SIGHUP, signal_handler);
 
     // Start log processing thread
     log_output_start();
+
+    // Apply network config
+    apply_network_config();
+
+    if(get_log_method() == 2) {
+        log_output_init(LOG_OUTPUT_WEBSOCKET);
+    }
 
     // Initialize web server
     web_init();
@@ -52,8 +61,11 @@ int main(int argc, char *argv[]) {
 
     DBG_INFO("Application started");
 
-    // Block on main thread (will be interrupted by signals)
-    pause();
+    // Main service loop
+    while (running) {
+        sleep(1);
+    }
 
+    DBG_INFO("Application stopped");
     return 0;
 }

@@ -76,22 +76,7 @@ function System() {
   const [message, setMessage] = useState({ type: "", text: "" });
 
   // System configuration state
-  const [systemConfig, setSystemConfig] = useState({
-    username: "admin",
-    password: "",
-    server1: CONFIG.DEFAULT_NTP_SERVERS.primary,
-    server2: CONFIG.DEFAULT_NTP_SERVERS.secondary,
-    server3: CONFIG.DEFAULT_NTP_SERVERS.tertiary,
-    timezone: CONFIG.DEFAULT_TIMEZONE,
-    enabled: true,
-    hport: CONFIG.DEFAULT_PORT,
-    wport: CONFIG.DEFAULT_WS_PORT,
-    time: null,
-    logMethod: CONFIG.DEFAULT_LOG_METHOD,
-  });
-
-  // Track original config for comparison
-  const [originalConfig, setOriginalConfig] = useState(null);
+  const [systemConfig, setSystemConfig] = useState({});
 
   const tabs = [
     { id: "user", label: "User Config" },
@@ -127,23 +112,21 @@ function System() {
       }
 
       const data = await response.json();
+      console.log("Received configuration:", data);
 
-      // Store original config for comparison
-      setOriginalConfig(data);
-
-      // Update all configurations from single response
+      // Update system configuration state
       setSystemConfig({
-        username: data.username || "admin",
+        username: data.username,
         password: "", // Don't set password from server
-        server1: data.server1 || CONFIG.DEFAULT_NTP_SERVERS.primary,
-        server2: data.server2 || CONFIG.DEFAULT_NTP_SERVERS.secondary,
-        server3: data.server3 || CONFIG.DEFAULT_NTP_SERVERS.tertiary,
-        timezone: data.timezone || CONFIG.DEFAULT_TIMEZONE,
-        enabled: data.enabled ?? true,
-        hport: data.hport || CONFIG.DEFAULT_PORT,
-        wport: data.wport || CONFIG.DEFAULT_WS_PORT,
+        server1: data.server1,
+        server2: data.server2,
+        server3: data.server3,
+        timezone: data.timezone,
+        enabled: data.enabled,
+        hport: data.hport,
+        wport: data.wport,
         time: data.time ? new Date(data.time) : null,
-        logMethod: data.logMethod || CONFIG.DEFAULT_LOG_METHOD,
+        logMethod: data.logMethod,
       });
     } catch (error) {
       console.error("Error fetching system configuration:", error);
@@ -269,7 +252,7 @@ function System() {
 
     setIsSaving(true);
     try {
-      // Prepare the complete configuration update
+      // Prepare configuration update
       const updatedConfig = {
         username: systemConfig.username,
         ...(systemConfig.password && { password: systemConfig.password }),
@@ -805,7 +788,7 @@ function System() {
               variant="warning"
               icon="RefreshIcon"
             >
-              ${isRestoring ? "Rebooting..." : "Reboot Server"}
+              ${isRestoring ? "Rebooting..." : "Reboot"}
             <//>
             <${Button}
               onClick=${handleFactoryReset}
@@ -829,7 +812,7 @@ function System() {
             icon="SaveIcon"
             type="button"
           >
-            ${isSaving ? "Saving..." : "Save All Changes"}
+            ${isSaving ? "Saving..." : "Save"}
           <//>
         </div>
       </div>
