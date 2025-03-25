@@ -66,17 +66,17 @@ function Devices() {
     t: 1000,
   });
   const [newEvent, setNewEvent] = useState({
-    name: "",
-    enabled: true,
-    triggerCondition: 1,
-    triggerPoint: "",
-    scanningCycle: 100,
-    minTriggerInterval: 1000,
-    upperThreshold: 20000,
-    lowerThreshold: 0,
-    triggerExecution: 1,
-    triggerAction: 1,
-    description: "",
+    n: "",
+    e: true,
+    c: 1,
+    p: "",
+    sc: 100,
+    mi: 1000,
+    ut: 20000,
+    lt: 0,
+    te: 1,
+    ta: 1,
+    d: "",
   });
 
   // Edit states
@@ -138,18 +138,18 @@ function Devices() {
 
   // Add function to determine which threshold fields should be shown
   const getThresholdVisibility = useMemo(() => {
-    const condition = parseInt(newEvent.triggerCondition);
+    const condition = parseInt(newEvent.c);
     return {
       showUpper: ![1, 2, 4, 8].includes(condition),
       showLower: ![1, 2, 3, 7].includes(condition),
     };
-  }, [newEvent.triggerCondition]);
+  }, [newEvent.c]);
 
   // Add function to determine if trigger action should be shown
   const showTriggerAction = useMemo(() => {
-    const condition = parseInt(newEvent.triggerCondition);
+    const condition = parseInt(newEvent.c);
     return ![1, 2].includes(condition);
-  }, [newEvent.triggerCondition]);
+  }, [newEvent.c]);
 
   // Add function to get trigger condition label
   const getTriggerConditionLabel = (condition) => {
@@ -916,12 +916,54 @@ function Devices() {
     });
   };
 
-  // Add function to handle event input changes
+  // Update handleEventInputChange to handle the new key names
   const handleEventInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    const keyMap = {
+      name: "n",
+      enabled: "e",
+      triggerCondition: "c",
+      triggerPoint: "p",
+      scanningCycle: "sc",
+      minTriggerInterval: "mi",
+      upperThreshold: "ut",
+      lowerThreshold: "lt",
+      triggerExecution: "te",
+      triggerAction: "ta",
+      description: "d",
+      c: "c",
+      p: "p",
+      sc: "sc",
+      mi: "mi",
+      ut: "ut",
+      lt: "lt",
+      te: "te",
+      ta: "ta",
+      d: "d",
+    };
+
+    // Handle checkbox inputs
+    if (type === "checkbox") {
+      setNewEvent((prev) => ({
+        ...prev,
+        [keyMap[name]]: checked,
+      }));
+      return;
+    }
+
+    // Handle numeric fields
+    if (["c", "sc", "mi", "ut", "lt", "te", "ta"].includes(keyMap[name])) {
+      setNewEvent((prev) => ({
+        ...prev,
+        [keyMap[name]]: parseInt(value) || 0,
+      }));
+      return;
+    }
+
+    // Handle select and other inputs
     setNewEvent((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [keyMap[name]]: value,
     }));
   };
 
@@ -929,46 +971,45 @@ function Devices() {
   const isEventNameUnique = (name, excludeId = null) => {
     return !events.some(
       (event) =>
-        event.id !== excludeId &&
-        event.name.toLowerCase() === name.toLowerCase()
+        event.id !== excludeId && event.n.toLowerCase() === name.toLowerCase()
     );
   };
 
-  // Update handleEventSubmit to include validations
+  // Update handleEventSubmit to use new key names
   const handleEventSubmit = (e) => {
     e.preventDefault();
 
     // Validate required fields
-    if (!newEvent.name.trim()) {
+    if (!newEvent.n.trim()) {
       setEventError("Event name is required");
       return;
     }
-    if (!newEvent.triggerPoint) {
+    if (!newEvent.p) {
       setEventError("Trigger point is required");
       return;
     }
-    if (!newEvent.scanningCycle) {
+    if (!newEvent.sc) {
       setEventError("Scanning cycle is required");
       return;
     }
-    if (!newEvent.minTriggerInterval) {
+    if (!newEvent.mi) {
       setEventError("Minimum trigger interval is required");
       return;
     }
 
     // Validate thresholds based on trigger condition
-    const condition = parseInt(newEvent.triggerCondition);
-    if ([3, 5, 6, 7].includes(condition) && !newEvent.upperThreshold) {
+    const condition = parseInt(newEvent.c);
+    if ([3, 5, 6, 7].includes(condition) && newEvent.ut === undefined) {
       setEventError("Upper threshold is required for this trigger condition");
       return;
     }
-    if ([4, 5, 6, 8].includes(condition) && !newEvent.lowerThreshold) {
+    if ([4, 5, 6, 8].includes(condition) && newEvent.lt === undefined) {
       setEventError("Lower threshold is required for this trigger condition");
       return;
     }
 
     // Check for unique event name
-    if (!isEventNameUnique(newEvent.name, editingEventId)) {
+    if (!isEventNameUnique(newEvent.n, editingEventId)) {
       setEventError("An event with this name already exists");
       return;
     }
@@ -997,55 +1038,55 @@ function Devices() {
     setEditingEventId(null);
     setEventError("");
     setNewEvent({
-      name: "",
-      enabled: true,
-      triggerCondition: 1,
-      triggerPoint: "",
-      scanningCycle: 1000,
-      minTriggerInterval: 1000,
-      upperThreshold: "",
-      lowerThreshold: "",
-      triggerExecution: 1,
-      triggerAction: 1,
-      description: "",
+      n: "",
+      e: true,
+      c: 1,
+      p: "",
+      sc: 100,
+      mi: 1000,
+      ut: 20000,
+      lt: 0,
+      te: 1,
+      ta: 1,
+      d: "",
     });
   };
 
-  // Add function to start editing an event
+  // Update startEditingEvent to use new key names
   const startEditingEvent = (event) => {
     setEditingEventId(event.id);
     setNewEvent({
-      name: event.name,
-      enabled: event.enabled,
-      triggerCondition: event.triggerCondition,
-      triggerPoint: event.triggerPoint,
-      scanningCycle: event.scanningCycle,
-      minTriggerInterval: event.minTriggerInterval,
-      upperThreshold: event.upperThreshold,
-      lowerThreshold: event.lowerThreshold,
-      triggerExecution: event.triggerExecution,
-      triggerAction: event.triggerAction,
-      description: event.description,
+      n: event.n,
+      e: event.e,
+      c: event.c,
+      p: event.p,
+      sc: event.sc,
+      mi: event.mi,
+      ut: event.ut,
+      lt: event.lt,
+      te: event.te,
+      ta: event.ta,
+      d: event.d,
     });
     setIsAddingEvent(true);
   };
 
-  // Update handleCancelAddEvent to handle edit mode
+  // Update handleCancelAddEvent to use new key names
   const handleCancelAddEvent = () => {
     setIsAddingEvent(false);
     setEditingEventId(null);
     setNewEvent({
-      name: "",
-      enabled: true,
-      triggerCondition: 1,
-      triggerPoint: "",
-      scanningCycle: 1000,
-      minTriggerInterval: 1000,
-      upperThreshold: "",
-      lowerThreshold: "",
-      triggerExecution: 1,
-      triggerAction: 1,
-      description: "",
+      n: "",
+      e: true,
+      c: 1,
+      p: "",
+      sc: 100,
+      mi: 1000,
+      ut: 20000,
+      lt: 0,
+      te: 1,
+      ta: 1,
+      d: "",
     });
   };
 
@@ -1816,22 +1857,33 @@ function Devices() {
                               class="block text-sm font-medium text-gray-700 mb-1"
                             >
                               Event Name <span class="text-red-500">*</span>
+                              <span class="text-xs text-gray-500 ml-1"
+                                >(max 20 chars)</span
+                              >
                             </label>
-                            <input
-                              type="text"
-                              name="name"
-                              value=${newEvent.name}
-                              onChange=${handleEventInputChange}
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              required
-                            />
+                            <div class="relative">
+                              <input
+                                type="text"
+                                name="name"
+                                value=${newEvent.n}
+                                onChange=${handleEventInputChange}
+                                maxlength="20"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required
+                              />
+                              <div
+                                class="absolute right-2 top-2 text-xs text-gray-500"
+                              >
+                                ${newEvent.n.length}/20
+                              </div>
+                            </div>
                           </div>
                           <div class="flex items-center">
                             <label class="flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
                                 name="enabled"
-                                checked=${newEvent.enabled}
+                                checked=${newEvent.e}
                                 onChange=${handleEventInputChange}
                                 class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                               />
@@ -1851,7 +1903,7 @@ function Devices() {
                             </label>
                             <select
                               name="triggerCondition"
-                              value=${newEvent.triggerCondition}
+                              value=${newEvent.c}
                               onChange=${handleEventInputChange}
                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
@@ -1871,7 +1923,7 @@ function Devices() {
                             </label>
                             <select
                               name="triggerPoint"
-                              value=${newEvent.triggerPoint}
+                              value=${newEvent.p}
                               onChange=${handleEventInputChange}
                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               disabled=${getAllNodes.length === 0}
@@ -1900,7 +1952,7 @@ function Devices() {
                             <input
                               type="number"
                               name="scanningCycle"
-                              value=${newEvent.scanningCycle}
+                              value=${newEvent.sc}
                               onChange=${handleEventInputChange}
                               min="0"
                               max="10000"
@@ -1919,7 +1971,7 @@ function Devices() {
                             <input
                               type="number"
                               name="minTriggerInterval"
-                              value=${newEvent.minTriggerInterval}
+                              value=${newEvent.mi}
                               onChange=${handleEventInputChange}
                               min="500"
                               max="10000"
@@ -1943,12 +1995,12 @@ function Devices() {
                               <input
                                 type="number"
                                 name="upperThreshold"
-                                value=${newEvent.upperThreshold}
+                                value=${newEvent.ut}
                                 onChange=${handleEventInputChange}
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter upper threshold"
                                 required=${[3, 5, 6, 7].includes(
-                                  parseInt(newEvent.triggerCondition)
+                                  parseInt(newEvent.c)
                                 )}
                               />
                             </div>
@@ -1965,12 +2017,12 @@ function Devices() {
                               <input
                                 type="number"
                                 name="lowerThreshold"
-                                value=${newEvent.lowerThreshold}
+                                value=${newEvent.lt}
                                 onChange=${handleEventInputChange}
                                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Enter lower threshold"
                                 required=${[4, 5, 6, 8].includes(
-                                  parseInt(newEvent.triggerCondition)
+                                  parseInt(newEvent.c)
                                 )}
                               />
                             </div>
@@ -1985,7 +2037,7 @@ function Devices() {
                           </label>
                           <select
                             name="triggerExecution"
-                            value=${newEvent.triggerExecution}
+                            value=${newEvent.te}
                             onChange=${handleEventInputChange}
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
@@ -2007,7 +2059,7 @@ function Devices() {
                             </label>
                             <select
                               name="triggerAction"
-                              value=${newEvent.triggerAction}
+                              value=${newEvent.ta}
                               onChange=${handleEventInputChange}
                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
@@ -2028,7 +2080,7 @@ function Devices() {
                           </label>
                           <textarea
                             name="description"
-                            value=${newEvent.description}
+                            value=${newEvent.d}
                             onChange=${handleEventInputChange}
                             rows="3"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2092,7 +2144,12 @@ function Devices() {
                             <th
                               class="px-4 py-3 text-left text-sm font-medium text-gray-500"
                             >
-                              Thresholds
+                              Trigger Action
+                            </th>
+                            <th
+                              class="px-4 py-3 text-left text-sm font-medium text-gray-500"
+                            >
+                              Execution
                             </th>
                             <th
                               class="px-4 py-3 text-left text-sm font-medium text-gray-500"
@@ -2102,7 +2159,7 @@ function Devices() {
                             <th
                               class="px-4 py-3 text-left text-sm font-medium text-gray-500"
                             >
-                              Execution
+                              Minimum Trigger Time
                             </th>
                             <th
                               class="px-4 py-3 text-left text-sm font-medium text-gray-500"
@@ -2127,46 +2184,38 @@ function Devices() {
                                 (event) => html`
                                   <tr class="hover:bg-gray-50">
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                      ${event.name}
+                                      ${event.n}
                                     </td>
                                     <td class="px-4 py-3">
                                       <span
                                         class=${`px-2 py-1 text-xs rounded-full ${
-                                          event.enabled
+                                          event.e
                                             ? "bg-green-100 text-green-800"
                                             : "bg-red-100 text-red-800"
                                         }`}
                                       >
-                                        ${event.enabled
-                                          ? "Enabled"
-                                          : "Disabled"}
+                                        ${event.e ? "Enabled" : "Disabled"}
                                       </span>
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                      ${getTriggerConditionLabel(
-                                        event.triggerCondition
-                                      )}
+                                      ${getTriggerConditionLabel(event.c)}
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                      ${event.triggerPoint}
+                                      ${event.p}
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                      ${event.upperThreshold &&
-                                      event.lowerThreshold
-                                        ? `${event.lowerThreshold} ~ ${event.upperThreshold}`
-                                        : event.upperThreshold
-                                        ? `> ${event.upperThreshold}`
-                                        : event.lowerThreshold
-                                        ? `< ${event.lowerThreshold}`
-                                        : "-"}
+                                      ${event.c === 1 || event.c === 2
+                                        ? "No Action"
+                                        : getTriggerActionLabel(event.ta)}
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                      ${event.scanningCycle}ms
+                                      ${getTriggerExecutionLabel(event.te)}
                                     </td>
                                     <td class="px-4 py-3 text-sm text-gray-900">
-                                      ${getTriggerExecutionLabel(
-                                        event.triggerExecution
-                                      )}
+                                      ${event.sc}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                      ${event.mi}
                                     </td>
                                     <td class="px-4 py-3">
                                       <div class="flex space-x-2">
