@@ -5,6 +5,5 @@
 #include "cJSON.h"
 
 void web_init(void);
-bool apply_network_config(void);
 
 #endif

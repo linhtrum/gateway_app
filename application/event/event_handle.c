@@ -7,42 +7,12 @@
 #include <signal.h>
 #include "cJSON.h"
 #include "../modbus/rtu_master.h"
+#include "event.h"
 
-#define DBG_TAG "EVENT"
+
+#define DBG_TAG "EVENT_HANDLE"
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
-
-#define MAX_EVENTS 10
-
-typedef struct {
-    char name[20];           // "n": Event Name - max 20 character
-    bool enabled;            // "e": Enable Event
-    int condition;           // "c": Trigger Condition
-    char point[20];          // "p": Trigger Point (Node Name)
-    int scan_cycle;          // "sc": Scanning Cycle
-    int min_interval;        // "mi": Min Trigger Interval
-    int upper_threshold;     // "ut": Upper Threshold value
-    int lower_threshold;     // "lt": Lower Threshold
-    int trigger_exec;        // "te": Trigger Execution
-    int trigger_action;      // "ta": Trigger Action
-    char description[128];   // "d": Event Description
-    long id;                 // "id": Event id
-    time_t last_trigger;     // Last trigger time
-    float last_value;        // Last value for follow conditions
-    timer_t timer;           // POSIX timer
-    bool timer_active;       // Timer active flag
-    bool is_triggered;       // Current trigger state
-    int initial_state;       // Initial relay state (0: NO, 1: NC)
-} event_data_t;
-
-typedef struct {
-    event_data_t events[MAX_EVENTS];
-    int count;
-} event_config_t;
-
-static event_config_t event_config;
-
-static bool parse_event_config(const char *json_str);
 
 // Function to check if a node value triggers an event
 static bool check_event_trigger(event_data_t *event, float node_value) {
@@ -262,109 +232,14 @@ static void stop_event_monitor(event_data_t *event) {
 // Start monitoring all enabled events
 void start_event_handle(void) {
     int enabled_count = 0;
-    char config_str[1024];
-    // Parse event config
-    if (db_read("event_config", config_str, sizeof(config_str)) == 0) {
-        DBG_ERROR("Failed to read event config");
-        return;
-    }
-    DBG_INFO("Event config: %s", config_str);
-    if (!parse_event_config(config_str)) {
-        DBG_ERROR("Failed to parse event config");
-        return;
-    }
+    event_config_t *event_config = event_get_config();
     
-    for (int i = 0; i < event_config.count; i++) {
-        if (event_config.events[i].enabled) {
-            start_event_monitor(&event_config.events[i]);
+    for (int i = 0; i < event_config->count; i++) {
+        if (event_config->events[i].enabled) {
+            start_event_monitor(&event_config->events[i]);
             enabled_count++;
         }
     }
     DBG_INFO("Started monitoring %d enabled events", enabled_count);
 }
 
-static bool parse_event_config(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    // Parse JSON
-    cJSON *root = cJSON_Parse(json_str);
-    if (!root) {
-        DBG_ERROR("Failed to parse event config JSON");
-        return false;
-    }
-
-    // Clear existing config
-    memset(&event_config, 0, sizeof(event_config_t));
-
-    // Parse events array
-    int array_size = cJSON_GetArraySize(root);
-    event_config.count = (array_size > MAX_EVENTS) ? MAX_EVENTS : array_size;
-
-    int enabled_count = 0;
-    for (int i = 0; i < event_config.count; i++) {
-        cJSON *event = cJSON_GetArrayItem(root, i);
-        if (!event) continue;
-
-        event_data_t *evt = &event_config.events[i];
-
-        // Parse event fields
-        cJSON *name = cJSON_GetObjectItem(event, "n");
-        if (name && name->valuestring) {
-            strncpy(evt->name, name->valuestring, sizeof(evt->name) - 1);
-        }
-
-        cJSON *enabled = cJSON_GetObjectItem(event, "e");
-        evt->enabled = enabled ? cJSON_IsTrue(enabled) : false;
-        if (evt->enabled) enabled_count++;
-
-        cJSON *condition = cJSON_GetObjectItem(event, "c");
-        evt->condition = condition ? condition->valueint : 0;
-
-        cJSON *point = cJSON_GetObjectItem(event, "p");
-        if (point && point->valuestring) {
-            strncpy(evt->point, point->valuestring, sizeof(evt->point) - 1);
-        }
-
-        cJSON *scan_cycle = cJSON_GetObjectItem(event, "sc");
-        evt->scan_cycle = scan_cycle ? scan_cycle->valueint : 1000; // Default 1 second
-
-        cJSON *min_interval = cJSON_GetObjectItem(event, "mi");
-        evt->min_interval = min_interval ? min_interval->valueint : 0;
-
-        cJSON *upper_threshold = cJSON_GetObjectItem(event, "ut");
-        evt->upper_threshold = upper_threshold ? upper_threshold->valueint : 0;
-
-        cJSON *lower_threshold = cJSON_GetObjectItem(event, "lt");
-        evt->lower_threshold = lower_threshold ? lower_threshold->valueint : 0;
-
-        cJSON *trigger_exec = cJSON_GetObjectItem(event, "te");
-        evt->trigger_exec = trigger_exec ? trigger_exec->valueint : 0;
-
-        cJSON *trigger_action = cJSON_GetObjectItem(event, "ta");
-        evt->trigger_action = trigger_action ? trigger_action->valueint : 0;
-
-        cJSON *description = cJSON_GetObjectItem(event, "d");
-        if (description && description->valuestring) {
-            strncpy(evt->description, description->valuestring, sizeof(evt->description) - 1);
-        }
-
-        cJSON *id = cJSON_GetObjectItem(event, "id");
-        evt->id = id ? id->valuedouble : 0;
-
-        // Initialize timer-related fields
-        evt->timer_active = false;
-        evt->last_trigger = 0;
-        evt->last_value = 0.0f;
-        evt->is_triggered = false;
-        evt->initial_state = 0;  // Default to Normal Open
-    }
-
-    DBG_INFO("Parsed event configuration: %d total events, %d enabled", 
-             event_config.count, enabled_count);
-
-    cJSON_Delete(root);
-    return true;
-}

@@ -3,7 +3,8 @@
 #include <pthread.h>
 #include <string.h>
 #include <unistd.h>
-#include "db.h"
+#include "../database/db.h"
+#include "../system/management.h"
 #include "cJSON.h"
 
 #define DBG_TAG "WEBSOCKET"
@@ -13,46 +14,7 @@
 #define DEFAULT_WS_PORT 4002
 #define DEFAULT_WS_HOST "ws://0.0.0.0"
 
-static char s_listen_on[64];  // Buffer for complete websocket URL
 static struct mg_connection *ws_conn = NULL;
-
-// Get websocket port from database
-static int get_websocket_port(void) {
-    char json_str[1024] = {0};
-    int port = DEFAULT_WS_PORT;  // Default port
-    
-    // Read JSON string from database
-    int read_len = db_read("system_config", json_str, sizeof(json_str));
-    if (read_len <= 0) {
-        DBG_ERROR("Failed to read system config from database");
-        return port;  // Return default port
-    }
-
-    cJSON *root = cJSON_Parse(json_str);
-    if (!root) {
-        DBG_ERROR("Failed to parse system config JSON");
-        return port;  // Return default port
-    }
-
-    // Get wport value
-    cJSON *port_obj = cJSON_GetObjectItem(root, "wport");
-    if (port_obj && cJSON_IsNumber(port_obj)) {
-        port = port_obj->valueint;
-        DBG_INFO("Websocket port loaded: %d", port);
-    } else {
-        DBG_WARN("Websocket port not found in config, using default: %d", port);
-    }
-
-    cJSON_Delete(root);
-    return port;
-}
-
-// Initialize websocket URL with port from config
-static void init_websocket_url(void) {
-    int port = get_websocket_port();
-    snprintf(s_listen_on, sizeof(s_listen_on), "%s:%d", DEFAULT_WS_HOST, port);
-    DBG_INFO("Websocket URL set to: %s", s_listen_on);
-}
 
 // Handle websocket connection
 static void fn(struct mg_connection *c, int ev, void *ev_data) {
@@ -95,14 +57,18 @@ void websocket_log_send(const char *message) {
 
 static void *websocket_log_thread(void *arg) {
     struct mg_mgr mgr;
-    
-    // Initialize websocket URL with port from config
-    init_websocket_url();
+    char ws_url[64]; 
+
+    int port = management_get_websocket_port();
+    if (port == 0) {
+        port = DEFAULT_WS_PORT;
+    }
+    snprintf(ws_url, sizeof(ws_url), "%s:%d", DEFAULT_WS_HOST, port);
     
     mg_mgr_init(&mgr);
-    mg_http_listen(&mgr, s_listen_on, fn, NULL);
+    mg_http_listen(&mgr, ws_url, fn, NULL);
     mg_wakeup_init(&mgr);
-    DBG_INFO("Websocket log server starting on %s", s_listen_on);
+    DBG_INFO("Websocket log server starting on %s", ws_url);
     
     while(1) {
         mg_mgr_poll(&mgr, 500);

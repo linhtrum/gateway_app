@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 # CFLAGS = -O2 -g
-INCLUDE = -I./packages/mongoose -I./packages/cJSON -I./application/web_server -I./packages/FlashDB/inc -I./packages/agile_modbus/inc -I./packages/agile_modbus/util -I./application/database -I./application/log -I./application/modbus -I./application/system -I./application/event -DMG_ENABLE_PACKED_FS=1
-LIB = -lpthread
+INCLUDE = -I./packages/mongoose -I./packages/cJSON -I./application/web_server -I./packages/FlashDB/inc -I./packages/agile_modbus/inc -I./packages/agile_modbus/util -I./application/database -I./application/log -I./application/modbus -I./application/system -I./application/event -I./application/network -DMG_ENABLE_PACKED_FS=1
+LIB = -lpthread -lrt
 TARGET = app
 SRCS = application/main.c \
        application/web_server/net.c \
@@ -15,6 +15,7 @@ SRCS = application/main.c \
 		packages/FlashDB/src/fdb_utils.c \
 		packages/FlashDB/src/fdb.c \
 		application/database/db.c \
+		application/modbus/device.c \
 		application/modbus/rtu_master.c \
 		application/modbus/serial.c \
 		packages/agile_modbus/src/agile_modbus.c \
@@ -25,8 +26,11 @@ SRCS = application/main.c \
 		application/log/log_output.c \
 		application/system/system.c \
 		application/web_server/websocket.c \
-		application/event/event_handle.c
-		
+		application/event/event_handle.c \
+		application/event/event.c \
+		application/network/network.c \
+		application/system/management.c
+
 OBJS = $(SRCS:.c=.o)
 
 run: clean all

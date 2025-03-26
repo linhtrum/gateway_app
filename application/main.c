@@ -11,6 +11,11 @@
 #include "system/system.h"
 #include "web_server/websocket.h"
 
+#include "system/management.h"
+#include "network/network.h"
+#include "event/event_handle.h"
+#include "modbus/device.h"
+
 #define DBG_TAG "MAIN"
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
@@ -41,11 +46,19 @@ int main(int argc, char *argv[]) {
     log_output_start();
 
     // Apply network config
-    apply_network_config();
+    // apply_network_config();
 
-    if(get_log_method() == 2) {
-        log_output_init(LOG_OUTPUT_WEBSOCKET);
-    }
+    // Initialize management
+    management_init();
+
+    // Initialize event
+    event_init();
+
+    // Initialize device
+    device_init();
+
+    // Initialize network
+    network_init();
 
     // Initialize web server
     web_init();
@@ -56,6 +69,10 @@ int main(int argc, char *argv[]) {
     // Initialize UDP server
     start_udp_server();
 
+    // Enable log output via websocket
+    if(management_get_log_method() == 2) {
+        log_output_init(LOG_OUTPUT_WEBSOCKET);
+    }
     // Initialize modbus master
     start_rtu_master();
 
