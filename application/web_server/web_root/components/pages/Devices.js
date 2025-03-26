@@ -31,6 +31,21 @@ const CONFIG = {
     [3, "03 - Read Holding Registers"],
     [4, "04 - Read Input Registers"],
   ],
+  REPORT_CHANNELS: [
+    [1, "MQTT"],
+    [2, "Socket"],
+  ],
+  MQTT_QOS_OPTIONS: [
+    [0, "QOS0"],
+    [1, "QOS1"],
+    [2, "QOS2"],
+  ],
+  REPORT_INTERVALS: [
+    [1, "Every Minute"],
+    [2, "Every Quarter"],
+    [3, "Every Hour"],
+    [4, "Fixed Time"],
+  ],
 };
 
 function Devices() {
@@ -50,6 +65,22 @@ function Devices() {
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventError, setEventError] = useState("");
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [reportConfig, setReportConfig] = useState({
+    enabled: false,
+    channel: 1,
+    mqttTopic: "",
+    mqttQos: 0,
+    periodicEnabled: false,
+    periodicInterval: 60,
+    regularEnabled: false,
+    regularInterval: 1,
+    regularFixedHour: 0,
+    regularFixedMinute: 0,
+    failurePaddingEnabled: false,
+    failurePaddingContent: "",
+    quotationMark: "",
+    jsonTemplate: "",
+  });
 
   // Form states
   const [newDevice, setNewDevice] = useState({
@@ -128,8 +159,8 @@ function Devices() {
     devices.forEach((device) => {
       device.ns?.forEach((node) => {
         nodes.push({
-          value: `${device.n}.${node.n}`,
-          label: `${device.n} - ${node.n}`,
+          value: node.n,
+          label: node.n,
         });
       });
     });
@@ -1136,6 +1167,32 @@ function Devices() {
     }
   };
 
+  // Add new function to handle report config changes
+  const handleReportConfigChange = (e) => {
+    const { name, value, type, checked } = e.target;
+
+    if (type === "checkbox") {
+      setReportConfig((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    if (type === "number") {
+      setReportConfig((prev) => ({
+        ...prev,
+        [name]: parseInt(value) || 0,
+      }));
+      return;
+    }
+
+    setReportConfig((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   // Update useEffect to fetch both device and event configurations
   useEffect(() => {
     document.title = "SBIOT-Devices";
@@ -1222,6 +1279,17 @@ function Devices() {
             >
               <!-- <${Icons.LinkIcon} className="mr-2" /> -->
               Linkage Control
+            </button>
+            <button
+              onClick=${() => setActiveTab("data-report")}
+              class=${`py-4 px-1 inline-flex items-center border-b-2 font-medium text-sm
+                ${
+                  activeTab === "data-report"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+            >
+              Data Report
             </button>
           </nav>
         </div>
@@ -1821,7 +1889,8 @@ function Devices() {
               `}
             </div>
           `
-        : html`
+        : activeTab === "linkage-control"
+        ? html`
             <!-- Linkage Control Tab Content -->
             <div class="bg-white rounded-lg shadow-md p-6">
               <div class="space-y-6">
@@ -1918,7 +1987,7 @@ function Devices() {
                             <label
                               class="block text-sm font-medium text-gray-700 mb-1"
                             >
-                              Trigger Point
+                              Trigger Point (Node Name)
                               <span class="text-red-500">*</span>
                             </label>
                             <select
@@ -2240,6 +2309,283 @@ function Devices() {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `
+        : html`
+            <!-- Data Report Tab Content -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+              <div class="space-y-6">
+                <div>
+                  <h2 class="text-xl font-semibold mb-4">
+                    Data Report Configuration
+                  </h2>
+
+                  <!-- Enable/Disable -->
+                  <div class="mb-6">
+                    <label class="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="enabled"
+                        checked=${reportConfig.enabled}
+                        onChange=${handleReportConfigChange}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span class="ml-2 text-sm text-gray-700"
+                        >Enable Data Reporting</span
+                      >
+                    </label>
+                  </div>
+
+                  <!-- Channel Selection -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Report Channel
+                    </label>
+                    <select
+                      name="channel"
+                      value=${reportConfig.channel}
+                      onChange=${handleReportConfigChange}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!reportConfig.enabled}
+                    >
+                      ${CONFIG.REPORT_CHANNELS.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
+
+                  <!-- MQTT Configuration -->
+                  ${reportConfig.channel === 1 &&
+                  html`
+                    <div class="mb-6 space-y-4">
+                      <div>
+                        <label
+                          class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          Report Topic
+                        </label>
+                        <input
+                          type="text"
+                          name="mqttTopic"
+                          value=${reportConfig.mqttTopic}
+                          onChange=${handleReportConfigChange}
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled=${!reportConfig.enabled}
+                          placeholder="Enter MQTT topic"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          QoS Level
+                        </label>
+                        <select
+                          name="mqttQos"
+                          value=${reportConfig.mqttQos}
+                          onChange=${handleReportConfigChange}
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled=${!reportConfig.enabled}
+                        >
+                          ${CONFIG.MQTT_QOS_OPTIONS.map(
+                            ([value, label]) => html`
+                              <option value=${value}>${label}</option>
+                            `
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  `}
+
+                  <!-- Periodic Reporting -->
+                  <div class="mb-6">
+                    <label class="flex items-center cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        name="periodicEnabled"
+                        checked=${reportConfig.periodicEnabled}
+                        onChange=${handleReportConfigChange}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        disabled=${!reportConfig.enabled}
+                      />
+                      <span class="ml-2 text-sm text-gray-700"
+                        >Enable Periodic Reporting</span
+                      >
+                    </label>
+                    ${reportConfig.periodicEnabled &&
+                    html`
+                      <div class="ml-6">
+                        <label
+                          class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          Reporting Interval (1-36000 seconds)
+                        </label>
+                        <input
+                          type="number"
+                          name="periodicInterval"
+                          value=${reportConfig.periodicInterval}
+                          onChange=${handleReportConfigChange}
+                          min="1"
+                          max="36000"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled=${!reportConfig.enabled}
+                        />
+                      </div>
+                    `}
+                  </div>
+
+                  <!-- Regular Reporting -->
+                  <div class="mb-6">
+                    <label class="flex items-center cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        name="regularEnabled"
+                        checked=${reportConfig.regularEnabled}
+                        onChange=${handleReportConfigChange}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        disabled=${!reportConfig.enabled}
+                      />
+                      <span class="ml-2 text-sm text-gray-700"
+                        >Enable Regular Reporting</span
+                      >
+                    </label>
+                    ${reportConfig.regularEnabled &&
+                    html`
+                      <div class="ml-6 space-y-4">
+                        <div>
+                          <label
+                            class="block text-sm font-medium text-gray-700 mb-2"
+                          >
+                            Regular Time
+                          </label>
+                          <select
+                            name="regularInterval"
+                            value=${reportConfig.regularInterval}
+                            onChange=${handleReportConfigChange}
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            disabled=${!reportConfig.enabled}
+                          >
+                            ${CONFIG.REPORT_INTERVALS.map(
+                              ([value, label]) => html`
+                                <option value=${value}>${label}</option>
+                              `
+                            )}
+                          </select>
+                        </div>
+                        ${reportConfig.regularInterval === 4 &&
+                        html`
+                          <div class="grid grid-cols-2 gap-4">
+                            <div>
+                              <label
+                                class="block text-sm font-medium text-gray-700 mb-2"
+                              >
+                                Hour (0-23)
+                              </label>
+                              <input
+                                type="number"
+                                name="regularFixedHour"
+                                value=${reportConfig.regularFixedHour}
+                                onChange=${handleReportConfigChange}
+                                min="0"
+                                max="23"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled=${!reportConfig.enabled}
+                              />
+                            </div>
+                            <div>
+                              <label
+                                class="block text-sm font-medium text-gray-700 mb-2"
+                              >
+                                Minute (0-59)
+                              </label>
+                              <input
+                                type="number"
+                                name="regularFixedMinute"
+                                value=${reportConfig.regularFixedMinute}
+                                onChange=${handleReportConfigChange}
+                                min="0"
+                                max="59"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                disabled=${!reportConfig.enabled}
+                              />
+                            </div>
+                          </div>
+                        `}
+                      </div>
+                    `}
+                  </div>
+
+                  <!-- Failure Padding -->
+                  <div class="mb-6">
+                    <label class="flex items-center cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        name="failurePaddingEnabled"
+                        checked=${reportConfig.failurePaddingEnabled}
+                        onChange=${handleReportConfigChange}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        disabled=${!reportConfig.enabled}
+                      />
+                      <span class="ml-2 text-sm text-gray-700"
+                        >Enable Failure Padding</span
+                      >
+                    </label>
+                    ${reportConfig.failurePaddingEnabled &&
+                    html`
+                      <div class="ml-6">
+                        <label
+                          class="block text-sm font-medium text-gray-700 mb-2"
+                        >
+                          Content of Padding
+                        </label>
+                        <input
+                          type="text"
+                          name="failurePaddingContent"
+                          value=${reportConfig.failurePaddingContent}
+                          onChange=${handleReportConfigChange}
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled=${!reportConfig.enabled}
+                          placeholder="Enter padding content"
+                        />
+                      </div>
+                    `}
+                  </div>
+
+                  <!-- Quotation Mark -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Quotation Mark
+                    </label>
+                    <input
+                      type="text"
+                      name="quotationMark"
+                      value=${reportConfig.quotationMark}
+                      onChange=${handleReportConfigChange}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!reportConfig.enabled}
+                      placeholder="Enter quotation mark"
+                    />
+                  </div>
+
+                  <!-- JSON Template -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      JSON Template
+                    </label>
+                    <textarea
+                      name="jsonTemplate"
+                      value=${reportConfig.jsonTemplate}
+                      onChange=${handleReportConfigChange}
+                      rows="4"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!reportConfig.enabled}
+                      placeholder="Enter JSON template"
+                    ></textarea>
                   </div>
                 </div>
               </div>

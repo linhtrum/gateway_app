@@ -923,3 +923,73 @@ void start_rtu_master(void) {
     
     pthread_attr_destroy(&attr);
 }
+
+// Get node value by node name
+int get_node_value(const char *node_name, float *value) {
+    if (!node_name || !value) {
+        DBG_ERROR("Invalid parameters for get_node_value");
+        return RTU_MASTER_INVALID;
+    }
+
+    // Find the node in device configuration
+    device_t *current_device = get_device_config();
+    if (!current_device) {
+        DBG_ERROR("Failed to get device configuration");
+        return RTU_MASTER_ERROR;
+    }
+
+    // Search through all devices and nodes
+    while (current_device) {
+        node_t *current_node = current_device->nodes;
+        while (current_node) {
+            if (strcmp(current_node->name, node_name) == 0) {
+                // Convert node value to float based on data type
+                switch (current_node->data_type) {
+                    case DATA_TYPE_BOOLEAN:
+                        *value = (float)current_node->value.bool_val;
+                        break;
+                    case DATA_TYPE_INT8:
+                        *value = (float)current_node->value.int8_val;
+                        break;
+                    case DATA_TYPE_UINT8:
+                        *value = (float)current_node->value.uint8_val;
+                        break;
+                    case DATA_TYPE_INT16:
+                        *value = (float)current_node->value.int16_val;
+                        break;
+                    case DATA_TYPE_UINT16:
+                        *value = (float)current_node->value.uint16_val;
+                        break;
+                    case DATA_TYPE_INT32_ABCD:
+                    case DATA_TYPE_INT32_CDAB:
+                        *value = (float)current_node->value.int32_val;
+                        break;
+                    case DATA_TYPE_UINT32_ABCD:
+                    case DATA_TYPE_UINT32_CDAB:
+                        *value = (float)current_node->value.uint32_val;
+                        break;
+                    case DATA_TYPE_FLOAT_ABCD:
+                    case DATA_TYPE_FLOAT_CDAB:
+                        *value = current_node->value.float_val;
+                        break;
+                    case DATA_TYPE_DOUBLE:
+                        *value = (float)current_node->value.double_val;
+                        break;
+                    default:
+                        DBG_ERROR("Unsupported data type for node: %s", node_name);
+                        free_device_config(current_device);
+                        return RTU_MASTER_INVALID;
+                }
+                free_device_config(current_device);
+                return RTU_MASTER_OK;
+            }
+            current_node = current_node->next;
+        }
+        device_t *next_device = current_device->next;
+        free_device(current_device);
+        current_device = next_device;
+    }
+
+    DBG_ERROR("Node not found: %s", node_name);
+    return RTU_MASTER_ERROR;
+}

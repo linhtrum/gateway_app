@@ -560,8 +560,6 @@ bool apply_network_config(void) {
 }
 
 
-
-
 static bool write_system_config(const char *json_str) {
     if (!json_str) {
         DBG_ERROR("Invalid JSON string");
@@ -682,6 +680,46 @@ static char* read_card_config(void) {
     return json_str;
 }
 
+static bool write_event_config(const char *json_str) {
+    if (!json_str) {
+        DBG_ERROR("Invalid JSON string");
+        return false;
+    }
+
+    // Write event config to database
+    int result = db_write("event_config", (void*)json_str, strlen(json_str) + 1);
+    if (result != 0) {
+        DBG_ERROR("Failed to write event config to database");
+        return false;
+    }
+
+    DBG_INFO("Event config written to database successfully");
+    return true;
+}
+
+static char* read_event_config(void) {
+    char *json_str = NULL;
+    size_t buf_size = 16*4096;  // Initial buffer size
+    
+    // Allocate initial buffer
+    json_str = calloc(1, buf_size);
+    if (!json_str) {
+        DBG_ERROR("Failed to allocate memory for event config");
+        return NULL;
+    }
+
+    // Read event config from database
+    int read_len = db_read("event_config", json_str, buf_size);
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read event config from database");
+        free(json_str);
+        return NULL;
+    }
+
+    DBG_INFO("Event config read from database successfully");
+    return json_str;
+}
+
 static void handle_devices_get(struct mg_connection *c) {
     DBG_INFO("Devices get");
     char *json_str = read_device_config();
@@ -689,8 +727,8 @@ static void handle_devices_get(struct mg_connection *c) {
         mg_http_reply(c, 200, s_json_header, "%s", json_str);
         free(json_str);
     } else {
-        mg_http_reply(c, 200, s_json_header, "%s", "[]");
-    }
+    mg_http_reply(c, 200, s_json_header, "%s", "[]");
+}
 }
 
 static void handle_system_get(struct mg_connection *c) {
@@ -842,6 +880,35 @@ static void handle_factory_reset_set(struct mg_connection *c, struct mg_http_mes
     mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
 }
 
+static void handle_event_get(struct mg_connection *c) {
+    char *json_str = read_event_config();
+    if (json_str) {
+        mg_http_reply(c, 200, s_json_header, "%s", json_str);
+        free(json_str);
+    } else {
+        mg_http_reply(c, 200, s_json_header, "%s", "[]");
+    }
+}
+
+static void handle_event_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    bool success = write_event_config(json_str);
+    free(json_str);
+    
+    if (success) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply event configuration\"}");
+    }
+}
+
 static bool get_http_config(char *url, size_t url_size, int *port) {
     if (!url || !port) {
         DBG_ERROR("Invalid parameters");
@@ -939,6 +1006,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         }
         else if (mg_match(hm->uri, mg_str("/api/network/set"), NULL)) {
             handle_network_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/event/get"), NULL)) {
+            handle_event_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/event/set"), NULL)) {
+            handle_event_set(c, hm);
         }
         else if (mg_match(hm->uri, mg_str("/api/reboot/set"), NULL)) {
             handle_reboot_set(c, hm);
