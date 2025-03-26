@@ -1,12 +1,16 @@
-#include "event/event_handle.h"
+#include "event_handle.h"
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <errno.h>
 #include <signal.h>
 #include "cJSON.h"
-#include "debug.h"
 #include "../modbus/rtu_master.h"
+
+#define DBG_TAG "EVENT"
+#define DBG_LVL LOG_INFO
+#include "dbg.h"
 
 #define MAX_EVENTS 10
 
@@ -37,6 +41,8 @@ typedef struct {
 } event_config_t;
 
 static event_config_t event_config;
+
+static bool parse_event_config(const char *json_str);
 
 // Function to check if a node value triggers an event
 static bool check_event_trigger(event_data_t *event, float node_value) {
@@ -254,8 +260,20 @@ static void stop_event_monitor(event_data_t *event) {
 }
 
 // Start monitoring all enabled events
-void start_event_monitor(void) {
+void start_event_handle(void) {
     int enabled_count = 0;
+    char config_str[1024];
+    // Parse event config
+    if (db_read("event_config", config_str, sizeof(config_str)) == 0) {
+        DBG_ERROR("Failed to read event config");
+        return;
+    }
+    DBG_INFO("Event config: %s", config_str);
+    if (!parse_event_config(config_str)) {
+        DBG_ERROR("Failed to parse event config");
+        return;
+    }
+    
     for (int i = 0; i < event_config.count; i++) {
         if (event_config.events[i].enabled) {
             start_event_monitor(&event_config.events[i]);
@@ -265,19 +283,7 @@ void start_event_monitor(void) {
     DBG_INFO("Started monitoring %d enabled events", enabled_count);
 }
 
-// Stop monitoring all events
-void stop_event_monitor(void) {
-    int active_count = 0;
-    for (int i = 0; i < event_config.count; i++) {
-        if (event_config.events[i].timer_active) {
-            stop_event_monitor(&event_config.events[i]);
-            active_count++;
-        }
-    }
-    DBG_INFO("Stopped monitoring %d active events", active_count);
-}
-
-bool parse_event_config(const char *json_str) {
+static bool parse_event_config(const char *json_str) {
     if (!json_str) {
         DBG_ERROR("Invalid JSON string");
         return false;
@@ -289,9 +295,6 @@ bool parse_event_config(const char *json_str) {
         DBG_ERROR("Failed to parse event config JSON");
         return false;
     }
-
-    // Stop existing event monitors
-    stop_event_monitor();
 
     // Clear existing config
     memset(&event_config, 0, sizeof(event_config_t));
