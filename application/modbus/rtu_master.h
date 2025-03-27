@@ -17,7 +17,7 @@
 #define RTU_MASTER_INVALID    -3
 
 // Function declarations
-int rtu_master_init(const char *port, int baud);
+int rtu_master_init(const char *port, int baud, int data_bits, int stop_bits, int parity, int flow_control);
 void rtu_master_poll(agile_modbus_t *ctx,int fd, device_t *config);
 void start_rtu_master(void);
 int get_node_value(const char *node_name, float *value);

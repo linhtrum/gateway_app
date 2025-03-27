@@ -12,16 +12,56 @@
 #include <unistd.h>
 #include <linux/route.h>
 #include <resolv.h>
-#include "db.h"
+
+#include "../database/db.h"
 #include "../network/network.h"
 #include "../log/log_buffer.h"
 #include "../log/log_output.h"
 #include "../modbus/device.h"
 #include "../system/management.h"
 #include "../event/event.h"
+#include "../modbus/serial.h"
+#include "../mqtt/mqtt.h"
 
 #define DEFAULT_HTTP_PORT 8000
 #define DEFAULT_HTTP_URL "http://0.0.0.0"
+
+//websocket
+#define API_WS "/websocket"
+
+//auth
+#define API_LOGIN "/api/login"
+#define API_LOGOUT "/api/logout"
+
+//devices
+#define API_DEVICES_GET "/api/devices/get"
+#define API_DEVICES_SET "/api/devices/set"
+
+//home
+#define API_HOME_GET "/api/home/get"
+#define API_HOME_SET "/api/home/set"
+
+//system
+#define API_SYSTEM_GET "/api/system/get"
+#define API_SYSTEM_SET "/api/system/set"
+
+//network
+#define API_NETWORK_GET "/api/network/get"
+#define API_NETWORK_SET "/api/network/set"
+
+//event
+#define API_EVENT_GET "/api/event/get"
+#define API_EVENT_SET "/api/event/set"
+
+//serial
+#define API_SERIAL_GET "/api/serial/get"
+#define API_SERIAL_SET "/api/serial/set"
+
+//factory
+#define API_FACTORY_SET "/api/factory/set"
+
+//reboot
+#define API_REBOOT_SET "/api/reboot/set"
 
 #define DBG_TAG "WEB"
 #define DBG_LVL LOG_INFO
@@ -377,6 +417,70 @@ static void handle_event_set(struct mg_connection *c, struct mg_http_message *hm
     free(json_str);
 }
 
+// Get serial configuration
+static void handle_serial_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("serial_config", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read serial config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+// Set serial configuration
+static void handle_serial_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';  
+
+    bool success = serial_save_config_from_json(json_str);
+    free(json_str);
+    
+    if (success) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply serial configuration\"}");
+    }
+}
+
+// Get MQTT configuration
+static void handle_mqtt_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("mqtt_config", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read mqtt config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+// Set MQTT configuration
+static void handle_mqtt_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    bool success = mqtt_save_config_from_json(json_str);
+    free(json_str);
+
+    if (success) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply mqtt configuration\"}");
+    }
+}
+
 // Function to send message to all connected websocket clients
 void send_websocket_message(const char *message) {
     if (!message || !ws_conn) return;
@@ -445,6 +549,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         }
         else if (mg_match(hm->uri, mg_str("/api/factory/set"), NULL)) {
             handle_factory_reset_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/serial/get"), NULL)) {
+            handle_serial_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/serial/set"), NULL)) {
+            handle_serial_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/mqtt/get"), NULL)) {
+            handle_mqtt_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/mqtt/set"), NULL)) {
+            handle_mqtt_set(c, hm);
         }
         else {
             struct mg_http_serve_opts opts;

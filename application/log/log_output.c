@@ -48,10 +48,11 @@ void log_output_init(uint32_t output_types) {
     
     // Add additional outputs
     if (output_types & LOG_OUTPUT_SERIAL) {
-        g_serial_fd = serial_open("/dev/ttyUSB0", 115200);
-        if (g_serial_fd >= 0) {
-            g_output_types |= LOG_OUTPUT_SERIAL;
-        }
+        // g_serial_fd = serial_open("/dev/ttyUSB0", 115200);
+        // if (g_serial_fd >= 0) {
+        //     g_output_types |= LOG_OUTPUT_SERIAL;
+        // }
+        g_output_types |= LOG_OUTPUT_SERIAL;
     }
     
     if (output_types & LOG_OUTPUT_WEBSOCKET) {
@@ -65,10 +66,11 @@ void log_output_add(uint32_t type) {
     pthread_mutex_lock(&g_output_mutex);
     
     if (type == LOG_OUTPUT_SERIAL) {
-        g_serial_fd = serial_open("/dev/ttyUSB0", 115200);
-        if (g_serial_fd >= 0) {
-            g_output_types |= type;
-        }
+        // g_serial_fd = serial_open("/dev/ttyUSB0", 115200);
+        // if (g_serial_fd >= 0) {
+        //     g_output_types |= type;
+        // }
+        g_output_types |= type;
     } else {
         g_output_types |= type;
     }

@@ -1,6 +1,6 @@
 "use strict";
 import { h, html, useState, useEffect } from "../../bundle.js";
-import { Icons, Button } from "../Components.js";
+import { Icons, Button, Tabs } from "../Components.js";
 
 // Constants and configuration
 const CONFIG = {
@@ -14,14 +14,6 @@ const CONFIG = {
     [256000, "256000"],
     [512000, "512000"],
     [921600, "921600"],
-    [1000000, "1000000"],
-    [2000000, "2000000"],
-    [3000000, "3000000"],
-    [4000000, "4000000"],
-    [5000000, "5000000"],
-    [6000000, "6000000"],
-    [7000000, "7000000"],
-    [8000000, "8000000"],
   ],
   DATA_BITS: [
     [5, "5"],
@@ -46,6 +38,13 @@ const CONFIG = {
     [1, "Hardware (RTS/CTS)"],
     [2, "Software (XON/XOFF)"],
   ],
+  WORKING_MODES: [
+    [0, "UDP Client"],
+    [1, "TCP Client"],
+    [2, "UDP Server"],
+    [3, "TCP Server"],
+    [4, "HTTP Client"],
+  ],
 };
 
 function Serial() {
@@ -55,22 +54,31 @@ function Serial() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [activeTab, setActiveTab] = useState("port");
 
   // Serial configuration state
   const [serialConfig, setSerialConfig] = useState({
-    enabled: false,
-    port: "",
+    port: "/dev/ttymxc1",
     baudRate: 115200,
     dataBits: 8,
     stopBits: 1,
     parity: 0,
     flowControl: 0,
-    timeout: 1000,
-    bufferSize: 1024,
+    timeout: 0,
+    bufferSize: 0,
   });
 
-  // Fetch serial configuration
-  const fetchSerialConfig = async () => {
+  // Socket configuration state
+  const [socketConfig, setSocketConfig] = useState({
+    enabled: false,
+    workingMode: 0,
+    remoteServerAddr: "",
+    localPort: 0,
+    remotePort: 1,
+  });
+
+  // Fetch configurations
+  const fetchConfigs = async () => {
     try {
       setIsLoading(true);
       setLoadError("");
@@ -78,38 +86,46 @@ function Serial() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch("/api/serial/get", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-      });
+      const [serialResponse, socketResponse] = await Promise.all([
+        fetch("/api/serial/get", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+        }),
+        fetch("/api/socket/get", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+        }),
+      ]);
 
       clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch serial configuration: ${response.statusText}`
-        );
+      if (!serialResponse.ok || !socketResponse.ok) {
+        throw new Error("Failed to fetch configurations");
       }
 
-      const data = await response.json();
-      setSerialConfig(data || serialConfig);
+      const [serialData, socketData] = await Promise.all([
+        serialResponse.json(),
+        socketResponse.json(),
+      ]);
+
+      setSerialConfig(serialData || serialConfig);
+      setSocketConfig(socketData || socketConfig);
     } catch (error) {
-      console.error("Error fetching serial configuration:", error);
+      console.error("Error fetching configurations:", error);
       setLoadError(
         error.name === "AbortError"
           ? "Request timed out. Please try again."
-          : error.message || "Failed to load serial configuration"
+          : error.message || "Failed to load configurations"
       );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Save serial configuration
-  const saveSerialConfig = async () => {
+  // Save configurations
+  const saveConfigs = async () => {
     try {
       setIsSaving(true);
       setSaveError("");
@@ -118,52 +134,54 @@ function Serial() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch("/api/serial/set", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(serialConfig),
-        signal: controller.signal,
-      });
+      const [serialResponse, socketResponse] = await Promise.all([
+        fetch("/api/serial/set", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(serialConfig),
+          signal: controller.signal,
+        }),
+        fetch("/api/socket/set", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(socketConfig),
+          signal: controller.signal,
+        }),
+      ]);
 
       clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        throw new Error(
-          `Failed to save serial configuration: ${response.statusText}`
-        );
+      if (!serialResponse.ok || !socketResponse.ok) {
+        throw new Error("Failed to save configurations");
       }
 
       setSaveSuccess(true);
       setIsSaving(false);
 
-      // Show success message for 3 seconds
       setTimeout(() => {
         setSaveSuccess(false);
-      }, 3000);
-
-      // Refresh page after a delay to allow server to apply changes
-      setTimeout(() => {
         window.location.reload();
-      }, 5000);
+      }, 3000);
     } catch (error) {
-      console.error("Error saving serial configuration:", error);
+      console.error("Error saving configurations:", error);
       setSaveError(
         error.name === "AbortError"
           ? "Request timed out. Please try again."
-          : error.message || "Failed to save serial configuration"
+          : error.message || "Failed to save configurations"
       );
       setIsSaving(false);
     }
   };
 
   // Handle configuration changes
-  const handleConfigChange = (e) => {
+  const handleConfigChange = (e, configType) => {
     const { name, value, type, checked } = e.target;
+    const config = configType === "serial" ? serialConfig : socketConfig;
+    const setConfig =
+      configType === "serial" ? setSerialConfig : setSocketConfig;
 
     if (type === "checkbox") {
-      setSerialConfig((prev) => ({
+      setConfig((prev) => ({
         ...prev,
         [name]: checked,
       }));
@@ -171,14 +189,14 @@ function Serial() {
     }
 
     if (type === "number") {
-      setSerialConfig((prev) => ({
+      setConfig((prev) => ({
         ...prev,
         [name]: parseInt(value) || 0,
       }));
       return;
     }
 
-    setSerialConfig((prev) => ({
+    setConfig((prev) => ({
       ...prev,
       [name]: value,
     }));
@@ -187,7 +205,7 @@ function Serial() {
   // Load configuration on component mount
   useEffect(() => {
     document.title = "SBIOT-Serial";
-    fetchSerialConfig();
+    fetchConfigs();
   }, []);
 
   if (isLoading) {
@@ -206,6 +224,11 @@ function Serial() {
     `;
   }
 
+  const tabs = [
+    { id: "port", label: "PORT" },
+    { id: "socket", label: "SOCKET" },
+  ];
+
   return html`
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-6">Serial Port Configuration</h1>
@@ -217,7 +240,7 @@ function Serial() {
         >
           <div>${loadError}</div>
           <button
-            onClick=${fetchSerialConfig}
+            onClick=${fetchConfigs}
             class="px-3 py-1 bg-red-200 hover:bg-red-300 rounded-md text-red-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             Retry
@@ -237,187 +260,267 @@ function Serial() {
         <div
           class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded"
         >
-          Serial configuration saved successfully! System will reload to apply
+          Configuration saved successfully! System will reload to apply
           changes...
         </div>
       `}
 
-      <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="space-y-6">
-          <!-- Enable/Disable -->
-          <div class="mb-6">
-            <label class="flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                name="enabled"
-                checked=${serialConfig.enabled}
-                onChange=${handleConfigChange}
-                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span class="ml-2 text-sm text-gray-700">Enable Serial Port</span>
-            </label>
-          </div>
+      <${Tabs}
+        tabs=${tabs}
+        activeTab=${activeTab}
+        onTabChange=${setActiveTab}
+      />
 
-          <!-- Port Selection -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Serial Port
-            </label>
-            <input
-              type="text"
-              name="port"
-              value=${serialConfig.port}
-              onChange=${handleConfigChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-              placeholder="Enter serial port (e.g., /dev/ttyUSB0)"
-            />
-          </div>
+      <div class="max-w-[70%] mx-auto">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          ${activeTab === "port"
+            ? html`
+                <div class="space-y-6">
+                  <!-- Port Selection -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Serial Port
+                    </label>
+                    <input
+                      type="text"
+                      name="port"
+                      value=${serialConfig.port}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter serial port (e.g., /dev/ttyUSB0)"
+                      readonly
+                    />
+                  </div>
 
-          <!-- Baud Rate -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Baud Rate
-            </label>
-            <select
-              name="baudRate"
-              value=${serialConfig.baudRate}
-              onChange=${handleConfigChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            >
-              ${CONFIG.BAUD_RATES.map(
-                ([value, label]) => html`
-                  <option value=${value}>${label}</option>
-                `
-              )}
-            </select>
-          </div>
+                  <!-- Baud Rate -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Baud Rate
+                    </label>
+                    <select
+                      name="baudRate"
+                      value=${serialConfig.baudRate}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      ${CONFIG.BAUD_RATES.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
 
-          <!-- Data Bits -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Data Bits
-            </label>
-            <select
-              name="dataBits"
-              value=${serialConfig.dataBits}
-              onChange=${handleConfigChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            >
-              ${CONFIG.DATA_BITS.map(
-                ([value, label]) => html`
-                  <option value=${value}>${label}</option>
-                `
-              )}
-            </select>
-          </div>
+                  <!-- Data Bits -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Data Bits
+                    </label>
+                    <select
+                      name="dataBits"
+                      value=${serialConfig.dataBits}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      ${CONFIG.DATA_BITS.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
 
-          <!-- Stop Bits -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Stop Bits
-            </label>
-            <select
-              name="stopBits"
-              value=${serialConfig.stopBits}
-              onChange=${handleConfigChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            >
-              ${CONFIG.STOP_BITS.map(
-                ([value, label]) => html`
-                  <option value=${value}>${label}</option>
-                `
-              )}
-            </select>
-          </div>
+                  <!-- Stop Bits -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Stop Bits
+                    </label>
+                    <select
+                      name="stopBits"
+                      value=${serialConfig.stopBits}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      ${CONFIG.STOP_BITS.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
 
-          <!-- Parity -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Parity
-            </label>
-            <select
-              name="parity"
-              value=${serialConfig.parity}
-              onChange=${handleConfigChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            >
-              ${CONFIG.PARITY.map(
-                ([value, label]) => html`
-                  <option value=${value}>${label}</option>
-                `
-              )}
-            </select>
-          </div>
+                  <!-- Parity -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Parity
+                    </label>
+                    <select
+                      name="parity"
+                      value=${serialConfig.parity}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      ${CONFIG.PARITY.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
 
-          <!-- Flow Control -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Flow Control
-            </label>
-            <select
-              name="flowControl"
-              value=${serialConfig.flowControl}
-              onChange=${handleConfigChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            >
-              ${CONFIG.FLOW_CONTROL.map(
-                ([value, label]) => html`
-                  <option value=${value}>${label}</option>
-                `
-              )}
-            </select>
-          </div>
+                  <!-- Flow Control -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Flow Control
+                    </label>
+                    <select
+                      name="flowControl"
+                      value=${serialConfig.flowControl}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      ${CONFIG.FLOW_CONTROL.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
 
-          <!-- Timeout -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Timeout (ms)
-            </label>
-            <input
-              type="number"
-              name="timeout"
-              value=${serialConfig.timeout}
-              onChange=${handleConfigChange}
-              min="0"
-              max="10000"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            />
-          </div>
+                  <!-- Timeout -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      UART Packet Time (ms)
+                    </label>
+                    <input
+                      type="number"
+                      name="timeout"
+                      value=${serialConfig.timeout}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      min="0"
+                      max="255"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
 
-          <!-- Buffer Size -->
-          <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Buffer Size (bytes)
-            </label>
-            <input
-              type="number"
-              name="bufferSize"
-              value=${serialConfig.bufferSize}
-              onChange=${handleConfigChange}
-              min="64"
-              max="4096"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled=${!serialConfig.enabled}
-            />
-          </div>
+                  <!-- Buffer Size -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      UART Packet Length (bytes)
+                    </label>
+                    <input
+                      type="number"
+                      name="bufferSize"
+                      value=${serialConfig.bufferSize}
+                      onChange=${(e) => handleConfigChange(e, "serial")}
+                      min="0"
+                      max="1460"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              `
+            : html`
+                <div class="space-y-6">
+                  <!-- Enable/Disable -->
+                  <div class="mb-6">
+                    <label class="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="enabled"
+                        checked=${socketConfig.enabled}
+                        onChange=${(e) => handleConfigChange(e, "socket")}
+                        class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span class="ml-2 text-sm text-gray-700"
+                        >Enable Socket</span
+                      >
+                    </label>
+                  </div>
+
+                  <!-- Working Mode -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Working Mode
+                    </label>
+                    <select
+                      name="workingMode"
+                      value=${socketConfig.workingMode}
+                      onChange=${(e) => handleConfigChange(e, "socket")}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!socketConfig.enabled}
+                    >
+                      ${CONFIG.WORKING_MODES.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
+
+                  <!-- Remote Server Address -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Remote Server Address
+                    </label>
+                    <input
+                      type="text"
+                      name="remoteServerAddr"
+                      value=${socketConfig.remoteServerAddr}
+                      onChange=${(e) => handleConfigChange(e, "socket")}
+                      maxlength="64"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!socketConfig.enabled}
+                      placeholder="Enter remote server address"
+                    />
+                  </div>
+
+                  <!-- Local Port -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Local Port
+                    </label>
+                    <input
+                      type="number"
+                      name="localPort"
+                      value=${socketConfig.localPort}
+                      onChange=${(e) => handleConfigChange(e, "socket")}
+                      min="0"
+                      max="65535"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!socketConfig.enabled}
+                    />
+                  </div>
+
+                  <!-- Remote Port -->
+                  <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      Remote Port
+                    </label>
+                    <input
+                      type="number"
+                      name="remotePort"
+                      value=${socketConfig.remotePort}
+                      onChange=${(e) => handleConfigChange(e, "socket")}
+                      min="1"
+                      max="65535"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled=${!socketConfig.enabled}
+                    />
+                  </div>
+                </div>
+              `}
         </div>
       </div>
 
       <!-- Save and Cancel Buttons -->
       <div
-        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-end gap-4"
+        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-end gap-4 max-w-[70%] mx-auto"
       >
         <${Button}
           onClick=${() => {
             if (confirm("Are you sure you want to discard all changes?")) {
-              fetchSerialConfig();
+              fetchConfigs();
             }
           }}
           variant="secondary"
@@ -427,7 +530,7 @@ function Serial() {
           Cancel
         <//>
         <${Button}
-          onClick=${saveSerialConfig}
+          onClick=${saveConfigs}
           disabled=${isSaving}
           loading=${isSaving}
           icon="SaveIcon"

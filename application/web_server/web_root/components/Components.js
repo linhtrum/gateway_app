@@ -512,6 +512,11 @@ export function Sidebar({ currentRoute }) {
       icon: html`<${Icons.SerialIcon} className="w-5 h-5" />`,
     },
     {
+      path: "/mqtt",
+      label: "MQTT",
+      icon: html`<${Icons.SerialIcon} className="w-5 h-5" />`,
+    },
+    {
       path: "/devices",
       label: "Devices",
       icon: html`<${Icons.DevicesIcon} className="w-5 h-5" />`,

@@ -481,13 +481,13 @@ static char* build_node_json(const char *node_name, node_t *node) {
 }
 
 // Initialize Modbus RTU master with improved error handling
-int rtu_master_init(const char *port, int baud) {
+int rtu_master_init(const char *port, int baud, int data_bits, int stop_bits, int parity, int flow_control) {
     if (!port) {
         DBG_ERROR("Invalid port parameter");
         return RTU_MASTER_INVALID;
     }
 
-    int fd = serial_open(port, baud);
+    int fd = serial_open(port, baud, data_bits, stop_bits, parity, flow_control);
     if (fd < 0) {
         DBG_ERROR("Failed to open serial port %s at %d baud", port, baud);
         return RTU_MASTER_ERROR;
@@ -562,7 +562,15 @@ static void *rtu_master_thread(void *arg) {
     }
 
     // Initialize serial port
-    fd = rtu_master_init(DEFAULT_PORT, DEFAULT_BAUD);
+    serial_config_t *serial_config = serial_get_config();
+    if (!serial_config) {
+        DBG_ERROR("Invalid serial configuration");
+        goto exit;
+    }
+
+    fd = rtu_master_init(serial_config->port, serial_config->baud_rate, 
+                        serial_config->data_bits, serial_config->stop_bits, 
+                        serial_config->parity, serial_config->flow_control);
     if (fd < 0) {
         DBG_ERROR("Failed to initialize RTU master");
         goto exit;

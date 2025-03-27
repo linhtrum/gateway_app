@@ -4,16 +4,16 @@
 #include <pthread.h>
 #include <signal.h>
 #include "web_server/net.h"
-#include "modbus/rtu_master.h"
 #include "database/db.h"
 #include "log/log_buffer.h"
 #include "log/log_output.h"
 #include "system/system.h"
-#include "web_server/websocket.h"
-
 #include "system/management.h"
+#include "web_server/websocket.h"
 #include "network/network.h"
 #include "event/event_handle.h"
+#include "modbus/serial.h"
+#include "modbus/rtu_master.h"
 #include "modbus/device.h"
 
 #define DBG_TAG "MAIN"
@@ -45,9 +45,6 @@ int main(int argc, char *argv[]) {
     // Start log processing thread
     log_output_start();
 
-    // Apply network config
-    // apply_network_config();
-
     // Initialize management
     management_init();
 
@@ -56,6 +53,12 @@ int main(int argc, char *argv[]) {
 
     // Initialize device
     device_init();
+
+    // Initialize serial
+    serial_init();
+
+    // Initialize mqtt
+    mqtt_init();
 
     // Initialize network
     network_init();
