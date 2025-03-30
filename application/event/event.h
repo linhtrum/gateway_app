@@ -9,24 +9,25 @@
 
 // Event data structure
 typedef struct {
-    char name[20];           // "n": Event Name - max 20 character
-    bool enabled;            // "e": Enable Event
-    int condition;           // "c": Trigger Condition
-    char point[20];          // "p": Trigger Point (Node Name)
-    int scan_cycle;          // "sc": Scanning Cycle
-    int min_interval;        // "mi": Min Trigger Interval
-    int upper_threshold;     // "ut": Upper Threshold value
-    int lower_threshold;     // "lt": Lower Threshold
-    int trigger_exec;        // "te": Trigger Execution
-    int trigger_action;      // "ta": Trigger Action
-    char description[128];   // "d": Event Description
-    long id;                 // "id": Event id
-    time_t last_trigger;     // Last trigger time
-    float last_value;        // Last value for follow conditions
-    timer_t timer;           // POSIX timer
-    bool timer_active;       // Timer active flag
-    bool is_triggered;       // Current trigger state
-    int initial_state;       // Initial relay state (0: NO, 1: NC)
+    char name[20];              // "n": Event Name - max 20 character
+    bool enabled;               // "e": Enable Event
+    int condition;              // "c": Trigger Condition
+    char point[20];             // "p": Trigger Point (Node Name)
+    int scan_cycle;             // "sc": Scanning Cycle
+    int min_interval;           // "mi": Min Trigger Interval
+    int upper_threshold;        // "ut": Upper Threshold value
+    int lower_threshold;        // "lt": Lower Threshold
+    int trigger_exec;           // "te": Trigger Execution
+    int trigger_action;         // "ta": Trigger Action
+    char description[128];      // "d": Event Description
+    long id;                    // "id": Event id
+    time_t last_trigger;        // Last trigger time
+    long long last_scan_time;   // Last scan time
+    float last_value;           // Last value for follow conditions
+    timer_t timer;              // POSIX timer
+    bool timer_active;          // Timer active flag
+    bool is_triggered;          // Current trigger state
+    int initial_state;          // Initial relay state (0: NO, 1: NC)
 } event_data_t;
 
 typedef struct {

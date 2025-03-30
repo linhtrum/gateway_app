@@ -47,6 +47,7 @@ typedef struct node {
     node_value_t value;  // Store the converted value
     struct node *next;
     uint16_t offset;  // Offset in the merged data array
+    bool is_ok;
 } node_t;
 
 // Structure for merged nodes with same function code

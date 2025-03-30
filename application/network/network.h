@@ -14,6 +14,12 @@ struct network_config {
     char dns1[16];
     char dns2[16];
     bool dhcp_enabled;
+    int network_priority;
+    int sim_mode;
+    char apn[16];
+    char apn_username[16];
+    char apn_password[16];
+    int auth_type;
 };
 
 // Initialize network configuration
@@ -23,7 +29,7 @@ void network_init(void);
 const struct network_config* network_get_config(void);
 
 // Update network configuration from JSON
-bool network_update_config(const char *json_str);
+bool network_parse_config(const char *json_str);
 
 // Convert network configuration to JSON string
 char* network_config_to_json(void);
@@ -31,14 +37,8 @@ char* network_config_to_json(void);
 // Get current network information from system
 bool network_get_current_info(void);
 
-// Save network configuration to database
-bool network_save_config(void);
-
 // Save network configuration from JSON
 bool network_save_config_from_json(const char *json_str);
-
-// Load network configuration from database
-bool network_load_config(void);
 
 // Set static IP configuration
 bool network_set_static_ip(const char *interface, const char *ip, const char *subnet, 

@@ -2,6 +2,346 @@
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
 import { Icons, Button, Card } from "../Components.js";
 
+// Add Card Modal Component
+const AddCardModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  newCardConfig,
+  setNewCardConfig,
+  devices,
+  displayCards,
+}) => {
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit();
+  };
+
+  return html`
+    <div
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <div class="flex justify-between items-center">
+            <h3 class="text-lg font-semibold">
+              Add New Display Card
+              ${displayCards.length >= 200
+                ? html`<span class="text-red-500 text-sm font-normal ml-2">
+                    (Maximum cards limit reached)
+                  </span>`
+                : html`<span class="text-gray-500 text-sm font-normal ml-2">
+                    (${200 - displayCards.length} cards remaining)
+                  </span>`}
+            </h3>
+            <button
+              onClick=${onClose}
+              class="text-gray-400 hover:text-gray-500 focus:outline-none"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="px-6 py-4">
+          <form onSubmit=${handleSubmit} class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Title</label
+                >
+                <input
+                  type="text"
+                  value=${newCardConfig.t}
+                  onInput=${(e) =>
+                    setNewCardConfig({
+                      ...newCardConfig,
+                      t: e.target.value.slice(0, 20),
+                    })}
+                  maxlength="20"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter card title (max 20 chars)"
+                  required
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Device</label
+                >
+                <select
+                  value=${newCardConfig.di}
+                  onInput=${(e) => {
+                    setNewCardConfig({
+                      ...newCardConfig,
+                      di: e.target.value,
+                      ti: "",
+                      hi: "",
+                    });
+                  }}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select device</option>
+                  ${devices.map(
+                    (device, index) => html`
+                      <option value=${index}>${device.n} (${device.da})</option>
+                    `
+                  )}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Temperature Node</label
+                >
+                <select
+                  value=${newCardConfig.ti}
+                  onInput=${(e) =>
+                    setNewCardConfig({
+                      ...newCardConfig,
+                      ti: e.target.value,
+                    })}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled=${!newCardConfig.di}
+                  required
+                >
+                  <option value="">Select temperature node</option>
+                  ${newCardConfig.di !== "" &&
+                  devices[newCardConfig.di].ns.map(
+                    (node, index) => html`
+                      <option value=${index}>
+                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
+                      </option>
+                    `
+                  )}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Humidity Node</label
+                >
+                <select
+                  value=${newCardConfig.hi}
+                  onInput=${(e) =>
+                    setNewCardConfig({
+                      ...newCardConfig,
+                      hi: e.target.value,
+                    })}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled=${!newCardConfig.di}
+                  required
+                >
+                  <option value="">Select humidity node</option>
+                  ${newCardConfig.di !== "" &&
+                  devices[newCardConfig.di].ns.map(
+                    (node, index) => html`
+                      <option value=${index}>
+                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
+                      </option>
+                    `
+                  )}
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4">
+              <button
+                type="button"
+                onClick=${onClose}
+                class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+// Edit Card Modal Component
+const EditCardModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  editingCard,
+  setEditingCard,
+  devices,
+}) => {
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit();
+  };
+
+  return html`
+    <div
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <div class="flex justify-between items-center">
+            <h3 class="text-lg font-semibold">Edit Display Card</h3>
+            <button
+              onClick=${onClose}
+              class="text-gray-400 hover:text-gray-500 focus:outline-none"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="px-6 py-4">
+          <form onSubmit=${handleSubmit} class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Title</label
+                >
+                <input
+                  type="text"
+                  value=${editingCard.t}
+                  onInput=${(e) =>
+                    setEditingCard({
+                      ...editingCard,
+                      t: e.target.value.slice(0, 20),
+                    })}
+                  maxlength="20"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter card title (max 20 chars)"
+                  required
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Device</label
+                >
+                <select
+                  value=${editingCard.di}
+                  onInput=${(e) => {
+                    setEditingCard({
+                      ...editingCard,
+                      di: e.target.value,
+                      ti: "",
+                      hi: "",
+                    });
+                  }}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select device</option>
+                  ${devices.map(
+                    (device, index) => html`
+                      <option value=${index}>${device.n} (${device.da})</option>
+                    `
+                  )}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Temperature Node</label
+                >
+                <select
+                  value=${editingCard.ti}
+                  onInput=${(e) =>
+                    setEditingCard({
+                      ...editingCard,
+                      ti: e.target.value,
+                    })}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled=${!editingCard.di}
+                  required
+                >
+                  <option value="">Select temperature node</option>
+                  ${editingCard.di !== "" &&
+                  devices[editingCard.di].ns.map(
+                    (node, index) => html`
+                      <option value=${index}>
+                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
+                      </option>
+                    `
+                  )}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Humidity Node</label
+                >
+                <select
+                  value=${editingCard.hi}
+                  onInput=${(e) =>
+                    setEditingCard({
+                      ...editingCard,
+                      hi: e.target.value,
+                    })}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled=${!editingCard.di}
+                  required
+                >
+                  <option value="">Select humidity node</option>
+                  ${editingCard.di !== "" &&
+                  devices[editingCard.di].ns.map(
+                    (node, index) => html`
+                      <option value=${index}>
+                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
+                      </option>
+                    `
+                  )}
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-4">
+              <button
+                type="button"
+                onClick=${onClose}
+                class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
 function Home() {
   const [displayCards, setDisplayCards] = useState([]);
   const [devices, setDevices] = useState([]);
@@ -25,6 +365,10 @@ function Home() {
   // Add WebSocket ref to persist across renders
   const wsRef = { current: null };
   const reconnectTimeoutRef = { current: null };
+
+  // Add new state for editing card
+  const [editingCardIndex, setEditingCardIndex] = useState(null);
+  const [editingCard, setEditingCard] = useState(null);
 
   // WebSocket connection setup
   const connectWebSocket = () => {
@@ -369,6 +713,58 @@ function Home() {
     }
   };
 
+  // Add new function to handle edit card
+  const handleEditCard = (cardIndex) => {
+    const card = displayCards[cardIndex];
+    setEditingCardIndex(cardIndex);
+    setEditingCard({
+      t: card.t,
+      di: devices.findIndex((d) => d.n === card.dn),
+      ti: devices
+        .find((d) => d.n === card.dn)
+        .ns.findIndex((n) => n.n === card.tn.n),
+      hi: devices
+        .find((d) => d.n === card.dn)
+        .ns.findIndex((n) => n.n === card.hn.n),
+    });
+  };
+
+  // Add new function to handle save edit
+  const handleSaveEdit = () => {
+    if (!editingCard || editingCardIndex === null) return;
+
+    const device = devices[parseInt(editingCard.di)];
+    setDisplayCards((prev) =>
+      prev.map((card, index) =>
+        index === editingCardIndex
+          ? {
+              t: editingCard.t,
+              dn: device.n,
+              tn: {
+                n: device.ns[parseInt(editingCard.ti)].n,
+                a: device.ns[parseInt(editingCard.ti)].a,
+                f: device.ns[parseInt(editingCard.ti)].f,
+                dt: device.ns[parseInt(editingCard.ti)].dt,
+                t: device.ns[parseInt(editingCard.ti)].t,
+                v: device.ns[parseInt(editingCard.ti)].value,
+              },
+              hn: {
+                n: device.ns[parseInt(editingCard.hi)].n,
+                a: device.ns[parseInt(editingCard.hi)].a,
+                f: device.ns[parseInt(editingCard.hi)].f,
+                dt: device.ns[parseInt(editingCard.hi)].dt,
+                t: device.ns[parseInt(editingCard.hi)].t,
+                v: device.ns[parseInt(editingCard.hi)].value,
+              },
+              lastUpdate: new Date(),
+            }
+          : card
+      )
+    );
+    setEditingCardIndex(null);
+    setEditingCard(null);
+  };
+
   // Memoize filtered cards to prevent unnecessary recalculations
   const filteredCards = useMemo(
     () =>
@@ -379,14 +775,56 @@ function Home() {
   );
 
   // Update the status indicator section
-  const getStatusColor = () => {
+  const getStatusIcon = () => {
     switch (wsStatus) {
       case "connected":
-        return "bg-green-500";
+        return html`
+          <svg
+            class="w-4 h-4 text-green-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        `;
       case "disconnected":
-        return "bg-red-500";
+        return html`
+          <svg
+            class="w-4 h-4 text-red-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        `;
       default:
-        return "bg-yellow-500";
+        return html`
+          <svg
+            class="w-4 h-4 text-yellow-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+        `;
     }
   };
 
@@ -456,7 +894,7 @@ function Home() {
           <h1 class="text-2xl font-bold">Dashboard</h1>
           <div class="flex items-center gap-2">
             <div class="flex items-center">
-              <div class="w-2 h-2 rounded-full ${getStatusColor()}"></div>
+              ${getStatusIcon()}
               <span class="ml-2 text-sm text-gray-600">${getStatusText()}</span>
             </div>
           </div>
@@ -510,132 +948,28 @@ function Home() {
         `}
       </div>
 
-      ${isAddingCard &&
-      html`
-        <div class="mb-6 bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-lg font-semibold mb-4">Add New Display Card</h2>
-          <form
-            onSubmit=${(e) => {
-              e.preventDefault();
-              handleAddCard();
-            }}
-            class="space-y-4"
-          >
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Title</label
-                >
-                <input
-                  type="text"
-                  value=${newCardConfig.t}
-                  onInput=${(e) =>
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      t: e.target.value.slice(0, 20),
-                    })}
-                  maxlength="20"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter card title (max 20 chars)"
-                  required
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Device</label
-                >
-                <select
-                  value=${newCardConfig.di}
-                  onInput=${(e) => {
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      di: e.target.value,
-                      ti: "",
-                      hi: "",
-                    });
-                  }}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select device</option>
-                  ${devices.map(
-                    (device, index) => html`
-                      <option value=${index}>${device.n} (${device.da})</option>
-                    `
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Temperature Node</label
-                >
-                <select
-                  value=${newCardConfig.ti}
-                  onInput=${(e) =>
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      ti: e.target.value,
-                    })}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!newCardConfig.di}
-                  required
-                >
-                  <option value="">Select temperature node</option>
-                  ${newCardConfig.di !== "" &&
-                  devices[newCardConfig.di].ns.map(
-                    (node, index) => html`
-                      <option value=${index}>
-                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
-                      </option>
-                    `
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Humidity Node</label
-                >
-                <select
-                  value=${newCardConfig.hi}
-                  onInput=${(e) =>
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      hi: e.target.value,
-                    })}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!newCardConfig.di}
-                  required
-                >
-                  <option value="">Select humidity node</option>
-                  ${newCardConfig.di !== "" &&
-                  devices[newCardConfig.di].ns.map(
-                    (node, index) => html`
-                      <option value=${index}>
-                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
-                      </option>
-                    `
-                  )}
-                </select>
-              </div>
-            </div>
-            <div class="flex justify-end space-x-3 mt-4">
-              <button
-                type="button"
-                onClick=${handleCancel}
-                class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        </div>
-      `}
+      <${AddCardModal}
+        isOpen=${isAddingCard}
+        onClose=${handleCancel}
+        onSubmit=${handleAddCard}
+        newCardConfig=${newCardConfig}
+        setNewCardConfig=${setNewCardConfig}
+        devices=${devices}
+        displayCards=${displayCards}
+      />
+
+      <${EditCardModal}
+        isOpen=${editingCardIndex !== null}
+        onClose=${() => {
+          setEditingCardIndex(null);
+          setEditingCard(null);
+        }}
+        onSubmit=${handleSaveEdit}
+        editingCard=${editingCard}
+        setEditingCard=${setEditingCard}
+        devices=${devices}
+      />
+
       ${displayCards.length > 0 &&
       html`
         <div class="grid grid-rows-[auto] grid-cols-4 gap-4">
@@ -645,6 +979,7 @@ function Home() {
                 key=${index}
                 card=${card}
                 onDelete=${() => handleDeleteCard(index)}
+                onEdit=${() => handleEditCard(index)}
                 onTitleUpdate=${(newTitle) => {
                   setDisplayCards((prev) =>
                     prev.map((c, i) =>

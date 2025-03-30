@@ -10,6 +10,7 @@ import MQTT from "./components/pages/MQTT.js";
 import Devices from "./components/pages/Devices.js";
 import System from "./components/pages/System.js";
 import Logs from "./components/pages/Logs.js";
+import IOFunction from "./components/pages/IOFunction.js";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -21,9 +22,9 @@ function App() {
 
   useEffect(() => fetch("/api/login").then(login), []);
 
-  if (!user) {
-    return html` <${Login} onLogin=${login} /> `;
-  }
+  // if (!user) {
+  //   return html` <${Login} onLogin=${login} /> `;
+  // }
 
   // If user is logged in, show main application
   return html`
@@ -41,6 +42,7 @@ function App() {
             <${Devices} path="/devices" />
             <${System} path="/system" />
             <${Logs} path="/logs" />
+            <${IOFunction} path="/io-function" />
           </${Router}>
         </main>
       </div>

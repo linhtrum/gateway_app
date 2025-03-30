@@ -1,17 +1,32 @@
 "use strict";
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
-import { Icons, Button } from "../Components.js";
+import { Icons, Button, Tabs } from "../Components.js";
 
 // Constants and configuration
 const CONFIG = {
   DEFAULT_NETWORK: {
-    ip: "192.168.1.100",
+    ip: "192.168.0.100",
     sm: "255.255.255.0",
-    gw: "192.168.1.1",
+    gw: "192.168.0.1",
     d1: "8.8.8.8",
     d2: "8.8.4.4",
     dh: false,
   },
+  NETWORK_PRIORITY: [
+    [0, "Ethernet only"],
+    [1, "Ethernet"],
+    [2, "LTE"],
+  ],
+  SIM_SWITCH: [
+    [0, "External SIM"],
+    [1, "Internal SIM"],
+    [2, "Dual card backup"],
+  ],
+  AUTH_TYPES: [
+    [0, "NONE"],
+    [1, "PAP"],
+    [2, "CHAP"],
+  ],
   API_TIMEOUT: 10000, // 10 seconds
   REBOOT_DELAY: 5000, // 5 seconds
   SUCCESS_MESSAGE_DURATION: 3000, // 3 seconds
@@ -24,15 +39,18 @@ const CONFIG = {
 
 function Network() {
   // State management
-  const [networkConfig, setNetworkConfig] = useState({});
-  const [isEditing, setIsEditing] = useState(false);
-  const [editConfig, setEditConfig] = useState({});
+  const [networkConfig, setNetworkConfig] = useState({
+    np: 0,
+  });
+  const [isEditing, setIsEditing] = useState(true);
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("priority");
 
   // Memoized validation functions
   const validateIpAddress = useMemo(
@@ -74,43 +92,48 @@ function Network() {
     []
   );
 
-  const fetchNetworkConfig = async () => {
+  const validateApnName = (apn) => {
+    if (!apn) return "APN name is required";
+    if (apn.length > 32) return "APN name must not exceed 32 characters";
+    return null;
+  };
+
+  const validateUsername = (username) => {
+    if (username && username.length > 32) {
+      return "Username must not exceed 32 characters";
+    }
+    return null;
+  };
+
+  const validatePassword = (password) => {
+    if (password && password.length > 32) {
+      return "Password must not exceed 32 characters";
+    }
+    return null;
+  };
+
+  const fetchConfig = async () => {
     try {
       setIsLoading(true);
+      setError(null);
       setLoadError("");
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        CONFIG.API_TIMEOUT
-      );
 
       const response = await fetch("/api/network/get", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        throw new Error(
-          `Failed to fetch network configuration: ${response.statusText}`
-        );
+        throw new Error("Failed to fetch network configuration");
       }
 
       const data = await response.json();
-      setNetworkConfig(data);
-      setEditConfig(data);
-    } catch (error) {
-      console.error("Error fetching network configuration:", error);
-      setLoadError(
-        error.name === "AbortError"
-          ? "Request timed out. Please try again."
-          : error.message || "Failed to load network configuration"
-      );
+      setNetworkConfig(data || {});
+    } catch (err) {
+      setError(err.message);
+      setLoadError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -119,9 +142,14 @@ function Network() {
   const handleInputChange = useMemo(
     () => (e) => {
       const { name, value, type, checked } = e.target;
-      setEditConfig((prev) => ({
+      setNetworkConfig((prev) => ({
         ...prev,
-        [name]: type === "checkbox" ? checked : value,
+        [name]:
+          type === "checkbox"
+            ? checked
+            : type === "select-one"
+            ? parseInt(value)
+            : value,
       }));
       // Clear error when user starts typing
       if (errors[name]) {
@@ -135,27 +163,33 @@ function Network() {
     e.preventDefault();
     const newErrors = {};
 
-    // Validate IP Address
-    if (!validateIpAddress(editConfig.ip)) {
-      newErrors.ip = errorMessages.ip;
-    }
-
-    // Validate Subnet Mask
-    if (!validateSubnetMask(editConfig.sm)) {
-      newErrors.sm = errorMessages.sm;
-    }
-
-    // Validate Gateway
-    if (!validateIpAddress(editConfig.gw)) {
-      newErrors.gw = errorMessages.gw;
-    }
-
-    // Validate DNS servers
-    if (!validateIpAddress(editConfig.d1)) {
-      newErrors.d1 = errorMessages.d1;
-    }
-    if (!validateIpAddress(editConfig.d2)) {
-      newErrors.d2 = errorMessages.d2;
+    // Validate based on active tab
+    if (activeTab === "ethernet") {
+      if (!validateIpAddress(networkConfig.ip)) {
+        newErrors.ip = errorMessages.ip;
+      }
+      if (!validateSubnetMask(networkConfig.sm)) {
+        newErrors.sm = errorMessages.sm;
+      }
+      if (!validateIpAddress(networkConfig.gw)) {
+        newErrors.gw = errorMessages.gw;
+      }
+      if (!validateIpAddress(networkConfig.d1)) {
+        newErrors.d1 = errorMessages.d1;
+      }
+      if (!validateIpAddress(networkConfig.d2)) {
+        newErrors.d2 = errorMessages.d2;
+      }
+    } else if (activeTab === "lte") {
+      if (validateApnName(networkConfig.apn)) {
+        newErrors.apn = validateApnName(networkConfig.apn);
+      }
+      if (validateUsername(networkConfig.lteUsername)) {
+        newErrors.lteUsername = validateUsername(networkConfig.lteUsername);
+      }
+      if (validatePassword(networkConfig.ltePassword)) {
+        newErrors.ltePassword = validatePassword(networkConfig.ltePassword);
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -168,22 +202,13 @@ function Network() {
     setSaveSuccess(false);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        CONFIG.API_TIMEOUT
-      );
-
       const response = await fetch("/api/network/set", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(editConfig),
-        signal: controller.signal,
+        body: JSON.stringify(networkConfig),
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(
@@ -192,28 +217,19 @@ function Network() {
       }
 
       // Call reboot API after successful save
-      const rebootController = new AbortController();
-      const rebootTimeoutId = setTimeout(
-        () => rebootController.abort(),
-        CONFIG.API_TIMEOUT
-      );
-
       const rebootResponse = await fetch("/api/reboot/set", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: rebootController.signal,
       });
-
-      clearTimeout(rebootTimeoutId);
 
       if (!rebootResponse.ok) {
         throw new Error("Failed to reboot server");
       }
 
       const data = await response.json();
-      setNetworkConfig(editConfig);
+      setNetworkConfig(networkConfig);
       setIsEditing(false);
       setErrors({});
       setSaveSuccess(true);
@@ -250,7 +266,7 @@ function Network() {
 
   const handleEdit = useMemo(
     () => () => {
-      setEditConfig(networkConfig);
+      setNetworkConfig(networkConfig);
       setIsEditing(true);
     },
     [networkConfig]
@@ -259,8 +275,10 @@ function Network() {
   // Load initial configuration
   useEffect(() => {
     document.title = "SBIOT-Network";
-    fetchNetworkConfig();
+    fetchConfig();
   }, []);
+
+  // console.table(networkConfig);
 
   // Memoized UI components
   const LoadingSpinner = useMemo(
@@ -362,14 +380,18 @@ function Network() {
     []
   );
 
+  const tabs = [
+    { id: "priority", label: "NETWORK PRIORITY" },
+    { id: "ethernet", label: "ETHERNET" },
+    { id: "lte", label: "LTE", disabled: networkConfig.np === 0 },
+  ];
+
   if (isLoading) {
     return html`
       <div class="p-6">
         <h1 class="text-2xl font-bold mb-6">Network Configuration</h1>
-        <div
-          class="bg-white rounded-lg shadow-md p-6 flex items-center justify-center"
-        >
-          ${LoadingSpinner}
+        <div class="flex items-center justify-center h-full">
+          <${Icons.SpinnerIcon} className="h-8 w-8 text-blue-600" />
         </div>
       </div>
     `;
@@ -379,135 +401,243 @@ function Network() {
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-6">Network Configuration</h1>
 
-      ${loadError && ErrorMessage(loadError, fetchNetworkConfig)}
+      ${loadError && ErrorMessage(loadError, fetchConfig)}
       ${saveError && ErrorMessage(saveError)}
       ${saveSuccess &&
       SuccessMessage(
         "Network configuration saved successfully! System will reboot to apply changes..."
       )}
 
-      <div class="bg-white rounded-lg shadow-md p-6">
-        ${isEditing
-          ? html`
-              <form onSubmit=${handleSubmit} class="space-y-4">
-                <div class="flex items-center mb-4">
-                  <label class="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="dh"
-                      checked=${editConfig.dh}
-                      onChange=${handleInputChange}
-                      class="form-checkbox h-5 w-5 text-blue-600"
-                    />
-                    <span class="ml-2 text-gray-700">Enable DHCP</span>
-                  </label>
-                </div>
+      <${Tabs}
+        tabs=${tabs}
+        activeTab=${activeTab}
+        onTabChange=${setActiveTab}
+      />
+      <div class="max-w-[60%] mx-auto">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="text-xl font-semibold mb-6">Network Settings</div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit=${handleSubmit} class="space-y-4">
+            ${activeTab === "priority"
+              ? html`
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2"
+                      >Network Priority</label
+                    >
+                    <select
+                      name="np"
+                      value=${networkConfig.np || 0}
+                      onChange=${handleInputChange}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      ${CONFIG.NETWORK_PRIORITY.map(
+                        ([value, label]) => html`
+                          <option value=${value}>${label}</option>
+                        `
+                      )}
+                    </select>
+                  </div>
+                `
+              : activeTab === "ethernet"
+              ? html`
+                  <div class="flex items-center mb-4">
+                    <label class="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="dh"
+                        checked=${networkConfig.dh}
+                        onChange=${handleInputChange}
+                        class="form-checkbox h-5 w-5 text-blue-600"
+                      />
+                      <span class="ml-2 text-gray-700">Enable DHCP</span>
+                    </label>
+                  </div>
+
                   <${NetworkField}
                     label="IP Address"
                     name="ip"
-                    value=${editConfig.ip}
+                    value=${networkConfig.ip}
                     onChange=${handleInputChange}
                     error=${errors.ip}
-                    disabled=${editConfig.dh}
+                    disabled=${networkConfig.dh}
                     placeholder="192.168.1.100"
                   />
                   <${NetworkField}
                     label="Subnet Mask"
                     name="sm"
-                    value=${editConfig.sm}
+                    value=${networkConfig.sm}
                     onChange=${handleInputChange}
                     error=${errors.sm}
-                    disabled=${editConfig.dh}
+                    disabled=${networkConfig.dh}
                     placeholder="255.255.255.0"
                   />
                   <${NetworkField}
                     label="Gateway"
                     name="gw"
-                    value=${editConfig.gw}
+                    value=${networkConfig.gw}
                     onChange=${handleInputChange}
                     error=${errors.gw}
-                    disabled=${editConfig.dh}
+                    disabled=${networkConfig.dh}
                     placeholder="192.168.1.1"
                   />
                   <${NetworkField}
                     label="Primary DNS"
                     name="d1"
-                    value=${editConfig.d1}
+                    value=${networkConfig.d1}
                     onChange=${handleInputChange}
                     error=${errors.d1}
-                    disabled=${editConfig.dh}
+                    disabled=${networkConfig.dh}
                     placeholder="8.8.8.8"
                   />
                   <${NetworkField}
                     label="Secondary DNS"
                     name="d2"
-                    value=${editConfig.d2}
+                    value=${networkConfig.d2}
                     onChange=${handleInputChange}
                     error=${errors.d2}
-                    disabled=${editConfig.dh}
+                    disabled=${networkConfig.dh}
                     placeholder="8.8.4.4"
                   />
-                </div>
+                `
+              : html`
+                  <div class="space-y-4">
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                        >SIM Switch</label
+                      >
+                      <select
+                        name="mo"
+                        value=${networkConfig.mo || 0}
+                        onChange=${handleInputChange}
+                        disabled=${networkConfig.np === 0}
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        ${CONFIG.SIM_SWITCH.map(
+                          ([value, label]) => html`
+                            <option value=${value}>${label}</option>
+                          `
+                        )}
+                      </select>
+                    </div>
 
-                <div class="flex justify-end space-x-3 mt-6">
-                  <button
-                    type="button"
-                    onClick=${handleCancel}
-                    class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    disabled=${isSaving}
-                  >
-                    Cancel
-                  </button>
-                  <${Button}
-                    onClick=${handleSubmit}
-                    disabled=${isSaving}
-                    loading=${isSaving}
-                    icon="SaveIcon"
-                  >
-                    ${isSaving ? "Saving..." : "Save Changes"}
-                  <//>
-                </div>
-              </form>
-            `
-          : html`
-              <div class="space-y-4">
-                <div class="flex justify-between items-center mb-6">
-                  <div class="text-xl font-semibold">Network Settings</div>
-                  <button
-                    onClick=${handleEdit}
-                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Edit Settings
-                  </button>
-                </div>
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                        >APN Name</label
+                      >
+                      <input
+                        type="text"
+                        name="apn"
+                        value=${networkConfig.apn || ""}
+                        onChange=${handleInputChange}
+                        maxlength="32"
+                        disabled=${networkConfig.np === 0}
+                        class="w-full px-3 py-2 border ${errors.apn
+                          ? "border-red-500"
+                          : "border-gray-300"} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter APN name"
+                      />
+                      ${errors.apn &&
+                      html`<p class="mt-1 text-sm text-red-500">
+                        ${errors.apn}
+                      </p>`}
+                    </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                  <${NetworkInfo}
-                    label="DHCP Status"
-                    value=${networkConfig.dh ? "Enabled" : "Disabled"}
-                  />
-                  <${NetworkInfo}
-                    label="IP Address"
-                    value=${networkConfig.ip}
-                  />
-                  <${NetworkInfo}
-                    label="Subnet Mask"
-                    value=${networkConfig.sm}
-                  />
-                  <${NetworkInfo} label="Gateway" value=${networkConfig.gw} />
-                  <${NetworkInfo}
-                    label="Primary DNS"
-                    value=${networkConfig.d1}
-                  />
-                  <${NetworkInfo}
-                    label="Secondary DNS"
-                    value=${networkConfig.d2}
-                  />
-                </div>
-              </div>
-            `}
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                        >Username</label
+                      >
+                      <input
+                        type="text"
+                        name="au"
+                        value=${networkConfig.au || ""}
+                        onChange=${handleInputChange}
+                        maxlength="32"
+                        disabled=${networkConfig.np === 0}
+                        class="w-full px-3 py-2 border ${errors.au
+                          ? "border-red-500"
+                          : "border-gray-300"} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter username"
+                      />
+                      ${errors.au &&
+                      html`<p class="mt-1 text-sm text-red-500">
+                        ${errors.au}
+                      </p>`}
+                    </div>
+
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                        >Password</label
+                      >
+                      <input
+                        type="password"
+                        name="ap"
+                        value=${networkConfig.ap || ""}
+                        onChange=${handleInputChange}
+                        maxlength="32"
+                        disabled=${networkConfig.np === 0}
+                        class="w-full px-3 py-2 border ${errors.ap
+                          ? "border-red-500"
+                          : "border-gray-300"} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter password"
+                      />
+                      ${errors.ap &&
+                      html`<p class="mt-1 text-sm text-red-500">
+                        ${errors.ap}
+                      </p>`}
+                    </div>
+
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-2"
+                        >Auth Type</label
+                      >
+                      <select
+                        name="at"
+                        value=${networkConfig.at || 0}
+                        onChange=${handleInputChange}
+                        disabled=${networkConfig.np === 0}
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        ${CONFIG.AUTH_TYPES.map(
+                          ([value, label]) => html`
+                            <option value=${value}>${label}</option>
+                          `
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                `}
+          </form>
+        </div>
+      </div>
+
+      <div
+        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-center gap-4 w-full"
+      >
+        <${Button}
+          onClick=${() => {
+            if (confirm("Are you sure you want to discard all changes?")) {
+              fetchConfig();
+            }
+          }}
+          variant="secondary"
+          icon="CloseIcon"
+          disabled=${isSaving}
+        >
+          Cancel
+        <//>
+        <${Button}
+          onClick=${handleSubmit}
+          disabled=${isSaving}
+          loading=${isSaving}
+          icon="SaveIcon"
+        >
+          ${isSaving ? "Saving..." : "Save"}
+        <//>
       </div>
     </div>
   `;

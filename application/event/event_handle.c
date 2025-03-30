@@ -6,13 +6,24 @@
 #include <errno.h>
 #include <signal.h>
 #include "cJSON.h"
-#include "../modbus/rtu_master.h"
 #include "event.h"
-
+#include <pthread.h>
+#include <unistd.h>
+#include "../modbus/rtu_master.h"
 
 #define DBG_TAG "EVENT_HANDLE"
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
+
+static long long current_time_miliseconds(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static bool timer_expired(event_data_t *event) {
+    return current_time_miliseconds() - event->last_scan_time >= event->scan_cycle;
+}
 
 // Function to check if a node value triggers an event
 static bool check_event_trigger(event_data_t *event, float node_value) {
@@ -53,7 +64,7 @@ static bool check_event_trigger(event_data_t *event, float node_value) {
             trigger = (node_value < event->lower_threshold);
             break;
         default:
-            return false;
+        return false;
     }
 
     // Handle state change
@@ -153,93 +164,53 @@ static void execute_event_action(event_data_t *event, float node_value) {
     event->last_trigger = current_time;
 }
 
-// Timer handler function
-static void timer_handler(union sigval sv) {
-    event_data_t *event = (event_data_t *)sv.sival_ptr;
-    if (!event || !event->enabled || !event->timer_active) return;
+// Event thread function
+static void* event_thread_function(void *arg) {
+    event_config_t *config = event_get_config();
+    if (!config) {
+        DBG_ERROR("Failed to get event configuration");
+        return NULL;
+    }
 
-    // Get node value from RTU master
-    float node_value = 0.0f;
-    if (get_node_value(event->point, &node_value) == RTU_MASTER_OK) {
-        // Check if event should trigger
-        if (check_event_trigger(event, node_value)) {
-            execute_event_action(event, node_value);
+    DBG_INFO("Event handle thread started");
+
+    // Main event loop
+    while (1) {
+        // Check each event
+        for (int i = 0; i < config->count; i++) {
+            event_data_t *event = &config->events[i];
+            if (!event->enabled) {
+                continue;
+            }
+
+            if(timer_expired(event)) {
+                event->last_scan_time = current_time_miliseconds();
+                float current_value = 0.0f;
+                if (get_node_value(event->point, &current_value) == RTU_MASTER_OK) {
+                    // Check if event should trigger
+                    if (check_event_trigger(event, current_value)) {
+                        execute_event_action(event, current_value);
+                    }
+                }
+            }
         }
+        usleep(10000); // Sleep for 10ms
     }
+
+    return NULL;
 }
 
-// Start monitoring for a specific event
-static void start_event_monitor(event_data_t *event) {
-    if (!event) {
-        DBG_ERROR("Invalid event pointer");
-        return;
-    }
-
-    if (!event->enabled) {
-        DBG_INFO("Skipping disabled event: %s", event->name);
-        return;
-    }
-
-    if (event->timer_active) {
-        DBG_INFO("Event monitor already active for: %s", event->name);
-        return;
-    }
-
-    struct sigevent sev;
-    struct itimerspec its;
+void start_event_handle_thread(void) {
+    pthread_t thread;
+    pthread_attr_t attr;
     
-    // Set up the timer event
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_notify_function = timer_handler;
-    sev.sigev_value.sival_ptr = event;
-    sev.sigev_notify_attributes = NULL;
-
-    // Create the timer
-    if (timer_create(CLOCK_MONOTONIC, &sev, &event->timer) == -1) {
-        DBG_ERROR("Failed to create timer for event %s: %s", 
-                 event->name, strerror(errno));
-        return;
-    }
-
-    // Set the timer interval
-    its.it_value.tv_sec = event->scan_cycle / 1000;
-    its.it_value.tv_nsec = (event->scan_cycle % 1000) * 1000000;
-    its.it_interval.tv_sec = event->scan_cycle / 1000;
-    its.it_interval.tv_nsec = (event->scan_cycle % 1000) * 1000000;
-
-    // Start the timer
-    if (timer_settime(event->timer, 0, &its, NULL) == -1) {
-        DBG_ERROR("Failed to start timer for event %s: %s", 
-                 event->name, strerror(errno));
-        timer_delete(event->timer);
-        return;
-    }
-
-    event->timer_active = true;
-    DBG_INFO("Event monitor timer started for event: %s (scan cycle: %dms)", 
-             event->name, event->scan_cycle);
-}
-
-// Stop monitoring for a specific event
-static void stop_event_monitor(event_data_t *event) {
-    if (!event || !event->timer_active) return;
-
-    event->timer_active = false;
-    timer_delete(event->timer);
-    DBG_INFO("Event monitor timer stopped for event: %s", event->name);
-}
-
-// Start monitoring all enabled events
-void start_event_handle(void) {
-    int enabled_count = 0;
-    event_config_t *event_config = event_get_config();
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     
-    for (int i = 0; i < event_config->count; i++) {
-        if (event_config->events[i].enabled) {
-            start_event_monitor(&event_config->events[i]);
-            enabled_count++;
-        }
+    int ret = pthread_create(&thread, &attr, event_thread_function, NULL);
+    if (ret != 0) {
+        DBG_ERROR("Failed to create event handle thread: %s", strerror(ret));
     }
-    DBG_INFO("Started monitoring %d enabled events", enabled_count);
+    
+    pthread_attr_destroy(&attr);
 }
-

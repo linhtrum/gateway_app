@@ -1,8 +1,23 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
 # CFLAGS = -O2 -g
-INCLUDE = -I./packages/mongoose -I./packages/cJSON -I./application/web_server -I./packages/FlashDB/inc -I./packages/agile_modbus/inc -I./packages/agile_modbus/util -I./application/database -I./application/log -I./application/modbus -I./application/system -I./application/event -I./application/network -DMG_ENABLE_PACKED_FS=1
-LIB = -lpthread -lrt
+INCLUDE = -I./packages/mongoose \
+		-I./packages/cJSON \
+		-I./application/web_server \
+		-I./packages/FlashDB/inc \
+		-I./packages/agile_modbus/inc \
+		-I./packages/agile_modbus/util \
+		-I./application/database \
+		-I./application/log \
+		-I./application/modbus \
+		-I./application/system \
+		-I./application/event \
+		-I./application/network \
+		-I./application/mqtt \
+		-DMG_ENABLE_PACKED_FS=1
+
+LIB = -lpthread -lrt -lpaho-mqtt3a
+
 TARGET = app
 SRCS = application/main.c \
        application/web_server/net.c \
@@ -29,8 +44,9 @@ SRCS = application/main.c \
 		application/event/event_handle.c \
 		application/event/event.c \
 		application/network/network.c \
-		application/system/management.c
-
+		application/system/management.c \
+		application/mqtt/mqtt.c \
+		application/mqtt/mqtt_handle.c
 OBJS = $(SRCS:.c=.o)
 
 run: clean all
@@ -41,7 +57,7 @@ all: $(TARGET)
 	./out/$(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) out/*.o -o $(TARGET) $(LIB)
+	$(CC) out/*.o -o $(TARGET) $(LIB) 
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDE)

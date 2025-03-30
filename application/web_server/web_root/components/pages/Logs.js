@@ -17,44 +17,30 @@ function Logs() {
   const [isHexValid, setIsHexValid] = useState(true);
   const [wsPort, setWsPort] = useState(CONFIG.DEFAULT_WS_PORT);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const logTextAreaRef = useRef(null);
 
   // Fetch system configuration to get WebSocket port
   const fetchSystemConfig = async () => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        CONFIG.API_TIMEOUT
-      );
+      setIsLoading(true);
+      setError(null);
 
       const response = await fetch("/api/system/get", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        throw new Error(
-          `Failed to fetch system configuration: ${response.statusText}`
-        );
+        throw new Error("Failed to fetch system configuration");
       }
 
       const data = await response.json();
       setWsPort(data.wport || CONFIG.DEFAULT_WS_PORT);
-    } catch (error) {
-      console.error("Error fetching system configuration:", error);
-      setMessage({
-        type: "error",
-        text:
-          error.name === "AbortError"
-            ? "Request timed out. Please try again."
-            : "Failed to load system configuration",
-      });
+    } catch (err) {
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -242,14 +228,9 @@ function Logs() {
   if (isLoading) {
     return html`
       <div class="p-6">
-        <h1 class="text-2xl font-bold">System Logs</h1>
-        <div
-          class="mt-6 bg-white rounded-lg shadow-md p-6 flex items-center justify-center"
-        >
-          <div class="flex items-center space-x-2">
-            <${Icons.SpinnerIcon} className="h-5 w-5 text-blue-600" />
-            <span class="text-gray-600">Loading configuration...</span>
-          </div>
+        <h1 class="text-2xl font-bold mb-6">System Logs</h1>
+        <div class="flex items-center justify-center h-full">
+          <${Icons.SpinnerIcon} className="h-8 w-8 text-blue-600" />
         </div>
       </div>
     `;
@@ -258,92 +239,108 @@ function Logs() {
   return html`
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-6">System Logs</h1>
+
+      ${error &&
+      html`
+        <div
+          class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded flex items-center justify-between"
+        >
+          <div>${error}</div>
+          <button
+            onClick=${fetchSystemConfig}
+            class="px-3 py-1 bg-red-200 hover:bg-red-300 rounded-md text-red-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            Retry
+          </button>
+        </div>
+      `}
       ${renderMessage()}
-
-      <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="space-y-6">
-          <div class="flex items-center justify-between">
-            <h2 class="text-lg font-medium text-gray-900">System Logs</h2>
-            <div class="flex items-center space-x-2">
-              <label class="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked=${isLoggingEnabled}
-                  onChange=${(e) => handleLoggingToggle(e.target.checked)}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span class="ml-2 text-sm text-gray-700">Enable Logging</span>
-              </label>
-              ${isLoggingEnabled &&
-              html`
-                <${Button}
-                  onClick=${clearAll}
-                  variant="warning"
-                  icon="TrashIcon"
-                >
-                  Clear All
-                <//>
-              `}
-            </div>
-          </div>
-
-          <div class="bg-gray-50 rounded-lg p-4">
-            <textarea
-              ref=${logTextAreaRef}
-              class="w-full h-96 font-mono text-sm bg-gray-900 text-gray-100 p-4 rounded-lg"
-              readonly
-              value=${logs.join("")}
-              placeholder=${isLoggingEnabled
-                ? "Waiting for logs..."
-                : "Enable logging to view system logs"}
-              style="direction: ltr;"
-            ></textarea>
-          </div>
-
-          ${isLoggingEnabled &&
-          html`
-            <div class="space-y-4">
-              <div class="flex flex-col space-y-2">
-                <label class="block text-sm font-medium text-gray-700">
-                  Data Input
-                </label>
-                <div class="flex space-x-2">
+      <div class="max-w-[60%] mx-auto">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          <div class="space-y-6">
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-medium text-gray-900">System Logs</h2>
+              <div class="flex items-center space-x-2">
+                <label class="flex items-center cursor-pointer">
                   <input
-                    type="text"
-                    value=${inputData}
-                    onInput=${(e) => handleInputChange(e.target.value)}
-                    class=${`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      !isHexValid ? "border-red-500" : "border-gray-300"
-                    }`}
-                    placeholder="Enter ASCII or HEX data (e.g., 0x01 0x02 or plain text)"
+                    type="checkbox"
+                    checked=${isLoggingEnabled}
+                    onChange=${(e) => handleLoggingToggle(e.target.checked)}
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
+                  <span class="ml-2 text-sm text-gray-700">Enable Logging</span>
+                </label>
+                ${isLoggingEnabled &&
+                html`
                   <${Button}
-                    onClick=${sendAsciiData}
-                    disabled=${!wsConnection}
-                    variant="primary"
+                    onClick=${clearAll}
+                    variant="warning"
+                    icon="TrashIcon"
                   >
-                    Send ASCII
+                    Clear All
                   <//>
-                  <${Button}
-                    onClick=${sendHexData}
-                    disabled=${!wsConnection}
-                    variant="secondary"
-                  >
-                    Send HEX
-                  <//>
-                </div>
-                ${!isHexValid &&
-                html` <p class="text-sm text-red-500">${message.text}</p> `}
+                `}
               </div>
             </div>
-          `}
-          ${!isLoggingEnabled &&
-          html`
-            <div class="text-sm text-gray-500">
-              Enable logging to view real-time system logs and send data. The
-              logs will be cleared when logging is disabled.
+
+            <div class="bg-gray-50 rounded-lg p-4">
+              <textarea
+                ref=${logTextAreaRef}
+                class="w-full h-96 font-mono text-sm bg-gray-900 text-gray-100 p-4 rounded-lg"
+                readonly
+                value=${logs.join("")}
+                placeholder=${isLoggingEnabled
+                  ? "Waiting for logs..."
+                  : "Enable logging to view system logs"}
+                style="direction: ltr;"
+              ></textarea>
             </div>
-          `}
+
+            ${isLoggingEnabled &&
+            html`
+              <div class="space-y-4">
+                <div class="flex flex-col space-y-2">
+                  <label class="block text-sm font-medium text-gray-700">
+                    Data Input
+                  </label>
+                  <div class="flex space-x-2">
+                    <input
+                      type="text"
+                      value=${inputData}
+                      onInput=${(e) => handleInputChange(e.target.value)}
+                      class=${`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        !isHexValid ? "border-red-500" : "border-gray-300"
+                      }`}
+                      placeholder="Enter ASCII or HEX data (e.g., 0x01 0x02 or plain text)"
+                    />
+                    <${Button}
+                      onClick=${sendAsciiData}
+                      disabled=${!wsConnection}
+                      variant="primary"
+                    >
+                      Send ASCII
+                    <//>
+                    <${Button}
+                      onClick=${sendHexData}
+                      disabled=${!wsConnection}
+                      variant="secondary"
+                    >
+                      Send HEX
+                    <//>
+                  </div>
+                  ${!isHexValid &&
+                  html` <p class="text-sm text-red-500">${message.text}</p> `}
+                </div>
+              </div>
+            `}
+            ${!isLoggingEnabled &&
+            html`
+              <div class="text-sm text-gray-500">
+                Enable logging to view real-time system logs and send data. The
+                logs will be cleared when logging is disabled.
+              </div>
+            `}
+          </div>
         </div>
       </div>
     </div>

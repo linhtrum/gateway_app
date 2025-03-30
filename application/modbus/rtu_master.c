@@ -350,7 +350,11 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
             int convert_result = convert_node_value(node, data_ptr);
             if (convert_result != RTU_MASTER_OK) {
                 DBG_ERROR("Failed to convert value for node %s in group", node->name);
+                node->is_ok = false;
                 return convert_result;
+            }
+            else {
+                node->is_ok = true;
             }
             
             // Log the converted value
@@ -533,6 +537,10 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
                 if (result != RTU_MASTER_OK) {
                     DBG_ERROR("Failed to poll node %s (error: %d)", 
                              current_node->name, result);
+                    current_node->is_ok = false;
+                }
+                else {
+                    current_node->is_ok = true;
                 }
                 // Sleep after each node poll
                 usleep(current_device->polling_interval * 1000);
@@ -598,7 +606,7 @@ static void *rtu_master_thread(void *arg) {
     return NULL;
 }
 
-void start_rtu_master(void) {
+void start_rtu_master_thread(void) {
     pthread_t thread;
     pthread_attr_t attr;
     
@@ -660,11 +668,11 @@ int get_node_value(const char *node_name, float *value) {
                     case DATA_TYPE_FLOAT_ABCD:
                     case DATA_TYPE_FLOAT_CDAB:
                         *value = current_node->value.float_val;
-                        break;
+                    break;
                     case DATA_TYPE_DOUBLE:
                         *value = (float)current_node->value.double_val;
-                        break;
-                    default:
+                    break;
+                default:
                         DBG_ERROR("Unsupported data type for node: %s", node_name);
                         return RTU_MASTER_INVALID;
                 }

@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 
-void start_event_handle(void);
-void stop_event_handle(void);
+void start_event_handle_thread(void);
 
 #endif

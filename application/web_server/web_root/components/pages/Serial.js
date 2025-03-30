@@ -50,10 +50,9 @@ const CONFIG = {
 function Serial() {
   // State management
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState("port");
 
   // Serial configuration state
@@ -81,25 +80,22 @@ function Serial() {
   const fetchConfigs = async () => {
     try {
       setIsLoading(true);
-      setLoadError("");
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      setError(null);
 
       const [serialResponse, socketResponse] = await Promise.all([
         fetch("/api/serial/get", {
           method: "GET",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+          },
         }),
         fetch("/api/socket/get", {
           method: "GET",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+          },
         }),
       ]);
-
-      clearTimeout(timeoutId);
 
       if (!serialResponse.ok || !socketResponse.ok) {
         throw new Error("Failed to fetch configurations");
@@ -110,15 +106,10 @@ function Serial() {
         socketResponse.json(),
       ]);
 
-      setSerialConfig(serialData || serialConfig);
-      setSocketConfig(socketData || socketConfig);
-    } catch (error) {
-      console.error("Error fetching configurations:", error);
-      setLoadError(
-        error.name === "AbortError"
-          ? "Request timed out. Please try again."
-          : error.message || "Failed to load configurations"
-      );
+      setSerialConfig(serialData || {});
+      setSocketConfig(socketData || {});
+    } catch (err) {
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -128,47 +119,37 @@ function Serial() {
   const saveConfigs = async () => {
     try {
       setIsSaving(true);
-      setSaveError("");
-      setSaveSuccess(false);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      setError(null);
+      setSuccess(false);
 
       const [serialResponse, socketResponse] = await Promise.all([
         fetch("/api/serial/set", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(serialConfig),
-          signal: controller.signal,
         }),
         fetch("/api/socket/set", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(socketConfig),
-          signal: controller.signal,
         }),
       ]);
-
-      clearTimeout(timeoutId);
 
       if (!serialResponse.ok || !socketResponse.ok) {
         throw new Error("Failed to save configurations");
       }
 
-      setSaveSuccess(true);
-      setIsSaving(false);
-
+      setSuccess(true);
       setTimeout(() => {
-        setSaveSuccess(false);
         window.location.reload();
-      }, 3000);
-    } catch (error) {
-      console.error("Error saving configurations:", error);
-      setSaveError(
-        error.name === "AbortError"
-          ? "Request timed out. Please try again."
-          : error.message || "Failed to save configurations"
-      );
+      }, 1000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setIsSaving(false);
     }
   };
@@ -211,14 +192,9 @@ function Serial() {
   if (isLoading) {
     return html`
       <div class="p-6">
-        <h1 class="text-2xl font-bold mb-6">Serial Port Configuration</h1>
-        <div
-          class="bg-white rounded-lg shadow-md p-6 flex items-center justify-center"
-        >
-          <div class="flex items-center space-x-2">
-            <${Icons.SpinnerIcon} className="h-5 w-5 text-blue-600" />
-            <span class="text-gray-600">Loading configuration...</span>
-          </div>
+        <h1 class="text-2xl font-bold mb-6">Serial Configuration</h1>
+        <div class="flex items-center justify-center h-full">
+          <${Icons.SpinnerIcon} className="h-8 w-8 text-blue-600" />
         </div>
       </div>
     `;
@@ -233,12 +209,12 @@ function Serial() {
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-6">Serial Port Configuration</h1>
 
-      ${loadError &&
+      ${error &&
       html`
         <div
           class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded flex items-center justify-between"
         >
-          <div>${loadError}</div>
+          <div>${error}</div>
           <button
             onClick=${fetchConfigs}
             class="px-3 py-1 bg-red-200 hover:bg-red-300 rounded-md text-red-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -247,15 +223,7 @@ function Serial() {
           </button>
         </div>
       `}
-      ${saveError &&
-      html`
-        <div
-          class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded"
-        >
-          ${saveError}
-        </div>
-      `}
-      ${saveSuccess &&
+      ${success &&
       html`
         <div
           class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded"
@@ -271,7 +239,7 @@ function Serial() {
         onTabChange=${setActiveTab}
       />
 
-      <div class="max-w-[70%] mx-auto">
+      <div class="max-w-[60%] mx-auto">
         <div class="bg-white rounded-lg shadow-md p-6">
           ${activeTab === "port"
             ? html`
@@ -515,7 +483,7 @@ function Serial() {
 
       <!-- Save and Cancel Buttons -->
       <div
-        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-end gap-4 max-w-[70%] mx-auto"
+        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-center gap-4 w-full"
       >
         <${Button}
           onClick=${() => {
@@ -535,7 +503,7 @@ function Serial() {
           loading=${isSaving}
           icon="SaveIcon"
         >
-          Save Configuration
+          ${isSaving ? "Saving..." : "Save"}
         <//>
       </div>
     </div>

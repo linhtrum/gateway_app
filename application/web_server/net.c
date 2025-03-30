@@ -26,43 +26,6 @@
 #define DEFAULT_HTTP_PORT 8000
 #define DEFAULT_HTTP_URL "http://0.0.0.0"
 
-//websocket
-#define API_WS "/websocket"
-
-//auth
-#define API_LOGIN "/api/login"
-#define API_LOGOUT "/api/logout"
-
-//devices
-#define API_DEVICES_GET "/api/devices/get"
-#define API_DEVICES_SET "/api/devices/set"
-
-//home
-#define API_HOME_GET "/api/home/get"
-#define API_HOME_SET "/api/home/set"
-
-//system
-#define API_SYSTEM_GET "/api/system/get"
-#define API_SYSTEM_SET "/api/system/set"
-
-//network
-#define API_NETWORK_GET "/api/network/get"
-#define API_NETWORK_SET "/api/network/set"
-
-//event
-#define API_EVENT_GET "/api/event/get"
-#define API_EVENT_SET "/api/event/set"
-
-//serial
-#define API_SERIAL_GET "/api/serial/get"
-#define API_SERIAL_SET "/api/serial/set"
-
-//factory
-#define API_FACTORY_SET "/api/factory/set"
-
-//reboot
-#define API_REBOOT_SET "/api/reboot/set"
-
 #define DBG_TAG "WEB"
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
@@ -251,9 +214,9 @@ static void handle_devices_get(struct mg_connection *c) {
     int read_len = db_read("device_config", config_str, sizeof(config_str));
     if (read_len <= 0) {
         DBG_ERROR("Failed to read device config from database");
-        mg_http_reply(c, 200, s_json_header, "%s", "[]");
+    mg_http_reply(c, 200, s_json_header, "%s", "[]");
         return;
-    }
+}
     mg_http_reply(c, 200, s_json_header, "%s", config_str);
 }
 
@@ -271,13 +234,14 @@ static void handle_system_get(struct mg_connection *c) {
 
 // Get network configuration
 static void handle_network_get(struct mg_connection *c) {
-    const char *config_str = network_config_to_json();
+    char *config_str = network_config_to_json();
     if (!config_str) {
         DBG_ERROR("Failed to read network config from database");
         mg_http_reply(c, 200, s_json_header, "%s", "{}");
         return;
     }
     mg_http_reply(c, 200, s_json_header, "%s", config_str);
+    free(config_str);
 }
 
 // Set network configuration
@@ -481,6 +445,98 @@ static void handle_mqtt_set(struct mg_connection *c, struct mg_http_message *hm)
     }
 }
 
+static void handle_publish_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("publish_topics", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read publish config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "[]");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+static void handle_publish_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);   
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    bool success = pub_topic_save_config_from_json(json_str);
+    free(json_str);
+
+    if (success) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply publish configuration\"}");
+    }
+}
+
+static void handle_subscribe_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("subscribe_topics", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read subscribe config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "[]");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+static void handle_subscribe_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    bool success = sub_topic_save_config_from_json(json_str);
+    free(json_str);
+
+    if (success) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply subscribe configuration\"}");
+    }
+}
+
+static void handle_report_get(struct mg_connection *c) {
+    // char config_str[4096] = {0};
+    // int read_len = db_read("report_config", config_str, sizeof(config_str));
+    // if (read_len <= 0) {
+    //     DBG_ERROR("Failed to read report config from database");    
+    //     mg_http_reply(c, 200, s_json_header, "%s", "[]");
+    //     return;
+    // }
+    // mg_http_reply(c, 200, s_json_header, "%s", config_str);
+    mg_http_reply(c, 200, s_json_header, "%s", "{}");
+}
+
+static void handle_report_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    // bool success = report_save_config_from_json(json_str);
+    bool success = true;
+    free(json_str);
+    
+    if (success) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply report configuration\"}");
+    }
+}
+
 // Function to send message to all connected websocket clients
 void send_websocket_message(const char *message) {
     if (!message || !ws_conn) return;
@@ -561,6 +617,24 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         }
         else if (mg_match(hm->uri, mg_str("/api/mqtt/set"), NULL)) {
             handle_mqtt_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/publish/get"), NULL)) {
+            handle_publish_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/publish/set"), NULL)) {
+            handle_publish_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/subscribe/get"), NULL)) {
+            handle_subscribe_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/subscribe/set"), NULL)) {
+            handle_subscribe_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/report/get"), NULL)) {
+            handle_report_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/report/set"), NULL)) {
+            handle_report_set(c, hm);
         }
         else {
             struct mg_http_serve_opts opts;

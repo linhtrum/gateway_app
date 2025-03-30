@@ -22,9 +22,18 @@ static struct network_config g_network_config = {0};
 
 // Initialize network configuration with default values
 void network_init(void) {
-    strncpy(g_network_config.interface, "eth0", IFNAMSIZ - 1);
-    g_network_config.interface[IFNAMSIZ - 1] = '\0';
-    network_load_config();  
+    char config_str[4096] = {0};
+    if (db_read("network_config", config_str, sizeof(config_str)) <= 0) {
+        DBG_ERROR("Failed to read network config from database");
+        return;
+    }
+
+    if (network_parse_config(config_str)) {
+        DBG_INFO("Network config parsed successfully");
+    }
+    else {
+        DBG_ERROR("Failed to parse network config");
+    }
     // if(g_network_config.dhcp_enabled) {
     //     network_set_dynamic_ip(g_network_config.interface);
     // }
@@ -45,7 +54,7 @@ bool network_get_dhcp_state(void) {
 }
 
 // Update network configuration from JSON
-bool network_update_config(const char *json_str) {
+bool network_parse_config(const char *json_str) {
     if (!json_str) {
         DBG_ERROR("Invalid JSON string");
         return false;
@@ -57,10 +66,20 @@ bool network_update_config(const char *json_str) {
         return false;
     }
 
+    // Parse network priority
+    cJSON *np_item = cJSON_GetObjectItem(root, "np");
+    if (np_item && np_item->valueint) {
+        g_network_config.network_priority = np_item->valueint;
+    }
+
     // Parse interface
     cJSON *if_item = cJSON_GetObjectItem(root, "if");
     if (if_item && if_item->valuestring) {
         strncpy(g_network_config.interface, if_item->valuestring, IFNAMSIZ - 1);
+        g_network_config.interface[IFNAMSIZ - 1] = '\0';
+    }
+    else {
+        strncpy(g_network_config.interface, "eth0", IFNAMSIZ - 1);
         g_network_config.interface[IFNAMSIZ - 1] = '\0';
     }
 
@@ -102,6 +121,39 @@ bool network_update_config(const char *json_str) {
     cJSON *dh_item = cJSON_GetObjectItem(root, "dh");
     g_network_config.dhcp_enabled = dh_item ? cJSON_IsTrue(dh_item) : false;
 
+    // Parse SIM mode
+    cJSON *mo_item = cJSON_GetObjectItem(root, "mo");
+    if (mo_item && mo_item->valueint) {
+        g_network_config.sim_mode = mo_item->valueint;
+    }
+
+    // Parse APN
+    cJSON *apn_item = cJSON_GetObjectItem(root, "apn");
+    if (apn_item && apn_item->valuestring) {
+        strncpy(g_network_config.apn, apn_item->valuestring, 16);
+        g_network_config.apn[15] = '\0';
+    }
+    
+    // Parse APN username
+    cJSON *au_item = cJSON_GetObjectItem(root, "au");
+    if (au_item && au_item->valuestring) {
+        strncpy(g_network_config.apn_username, au_item->valuestring, 16);
+        g_network_config.apn_username[15] = '\0';
+    }
+
+    // Parse APN password
+    cJSON *ap_item = cJSON_GetObjectItem(root, "ap");
+    if (ap_item && ap_item->valuestring) {
+        strncpy(g_network_config.apn_password, ap_item->valuestring, 16);
+        g_network_config.apn_password[15] = '\0';
+    }
+    
+    // Parse authentication type
+    cJSON *at_item = cJSON_GetObjectItem(root, "at");
+    if (at_item && at_item->valueint) {
+        g_network_config.auth_type = at_item->valueint;
+    }
+
     cJSON_Delete(root);
     return true;
 }
@@ -113,7 +165,7 @@ char* network_config_to_json(void) {
         DBG_ERROR("Failed to create JSON object");
         return NULL;
     }
-
+    cJSON_AddNumberToObject(root, "np", g_network_config.network_priority);
     cJSON_AddStringToObject(root, "if", g_network_config.interface);
     cJSON_AddStringToObject(root, "ip", g_network_config.ip);
     cJSON_AddStringToObject(root, "sm", g_network_config.subnet);
@@ -121,6 +173,11 @@ char* network_config_to_json(void) {
     cJSON_AddStringToObject(root, "d1", g_network_config.dns1);
     cJSON_AddStringToObject(root, "d2", g_network_config.dns2);
     cJSON_AddBoolToObject(root, "dh", g_network_config.dhcp_enabled);
+    cJSON_AddNumberToObject(root, "mo", g_network_config.sim_mode);
+    cJSON_AddStringToObject(root, "apn", g_network_config.apn);
+    cJSON_AddStringToObject(root, "au", g_network_config.apn_username);
+    cJSON_AddStringToObject(root, "ap", g_network_config.apn_password);
+    cJSON_AddNumberToObject(root, "at", g_network_config.auth_type);
 
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -277,19 +334,6 @@ bool network_get_current_info(void) {
     return success;
 }
 
-// Save network configuration to database
-bool network_save_config(void) {
-    char *json_str = network_config_to_json();
-    if (!json_str) {
-        DBG_ERROR("Failed to convert network config to JSON");
-        return false;
-    }
-
-    bool success = (db_write("network_config", json_str, strlen(json_str) + 1) == 0);
-    free(json_str);
-    return success;
-}
-
 // Save network configuration from JSON
 bool network_save_config_from_json(const char *json_str) {
     if (!json_str) {
@@ -299,17 +343,6 @@ bool network_save_config_from_json(const char *json_str) {
 
     bool success = (db_write("network_config", json_str, strlen(json_str) + 1) == 0);
     return success;
-}
-
-// Load network configuration from database
-bool network_load_config(void) {
-    char config_str[4096] = {0};
-    if (db_read("network_config", config_str, sizeof(config_str)) <= 0) {
-        DBG_ERROR("Failed to read network config from database");
-        return false;
-    }
-
-    return network_update_config(config_str);
 }
 
 // Set static IP configuration

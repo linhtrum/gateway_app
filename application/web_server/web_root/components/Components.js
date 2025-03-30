@@ -381,13 +381,85 @@ export const Icons = {
       stroke-linecap="round"
       stroke-linejoin="round"
     >
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+      <path d="M12 17v-11.5" />
+      <path d="M7 10v3l5 3" />
+      <path d="M12 14.5l5 -2v-2.5" />
+      <path d="M16 10h2v-2h-2z" />
+      <path d="M7 9m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+      <path d="M10 5.5h4l-2 -2.5z" />
+    </svg>
+  `,
+
+  // IO Function icon
+  IOFunctionIcon: ({ className = "h-5 w-5" }) => html`
+    <svg
+      class=${className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
+      <line x1="7" y1="7" x2="17" y2="7" />
+      <line x1="7" y1="12" x2="17" y2="12" />
+      <line x1="7" y1="17" x2="17" y2="17" />
+    </svg>
+  `,
+
+  // Control center icon
+  ControlCenterIcon: ({ className = "h-5 w-5" }) => html`
+    <svg
+      class=${className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+      <g
+        id="SVGRepo_tracerCarrier"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      ></g>
+      <g id="SVGRepo_iconCarrier">
+        <title id="controlCentreIconTitle">Control Centre</title>
+        <path
+          d="M4 6.5C4 4.567 5.567 3 7.5 3L16.5 3C18.433 3 20 4.567 20 6.5V6.5C20 8.433 18.433 10 16.5 10L7.5 10C5.567 10 4 8.433 4 6.5V6.5Z"
+        ></path>
+        <path
+          d="M20 17.5C20 19.433 18.433 21 16.5 21L7.5 21C5.567 21 4 19.433 4 17.5V17.5C4 15.567 5.567 14 7.5 14L16.5 14C18.433 14 20 15.567 20 17.5V17.5Z"
+        ></path>
+        <circle cx="16.5" cy="17.5" r="1"></circle>
+        <circle cx="7.5" cy="6.5" r="1"></circle>
+      </g>
+    </svg>
+  `,
+  MqttIcon: ({ className = "h-5 w-5" }) => html`
+    <svg
+      class=${className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path
-        d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+        d="M6.657 16c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486c0 1.927 -1.551 3.487 -3.465 3.487h-11.878"
       />
-      <line x1="8" y1="6" x2="16" y2="6" />
-      <line x1="8" y1="10" x2="16" y2="10" />
-      <line x1="8" y1="14" x2="12" y2="14" />
+      <path d="M12 16v5" />
+      <path d="M16 16v4a1 1 0 0 0 1 1h4" />
+      <path d="M8 16v4a1 1 0 0 1 -1 1h-4" />
     </svg>
   `,
 };
@@ -514,12 +586,17 @@ export function Sidebar({ currentRoute }) {
     {
       path: "/mqtt",
       label: "MQTT",
-      icon: html`<${Icons.SerialIcon} className="w-5 h-5" />`,
+      icon: html`<${Icons.MqttIcon} className="w-5 h-5" />`,
     },
     {
       path: "/devices",
       label: "Devices",
       icon: html`<${Icons.DevicesIcon} className="w-5 h-5" />`,
+    },
+    {
+      path: "/io-function",
+      label: "IO Function",
+      icon: html`<${Icons.ControlCenterIcon} className="w-5 h-5" />`,
     },
     {
       path: "/logs",
@@ -573,10 +650,15 @@ export function Tabs({ tabs, activeTab, onTabChange }) {
           (tab) => html`
             <button
               onClick=${() => onTabChange(tab.id)}
+              disabled=${tab.disabled}
               class=${`py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
                   ? "border-blue-500 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              } ${
+                tab.disabled
+                  ? "opacity-50 cursor-not-allowed pointer-events-none"
+                  : ""
               }`}
             >
               ${tab.label}
@@ -588,7 +670,7 @@ export function Tabs({ tabs, activeTab, onTabChange }) {
   `;
 }
 
-export function Card({ card, onDelete, onTitleUpdate }) {
+export function Card({ card, onDelete, onTitleUpdate, onEdit }) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.t);
   const [lastUpdate, setLastUpdate] = useState(card.lastUpdate);
@@ -687,22 +769,24 @@ export function Card({ card, onDelete, onTitleUpdate }) {
                 <h2 class="text-lg font-semibold text-gray-800 truncate">
                   ${title}
                 </h2>
-                <button
-                  onClick=${() => setIsEditing(true)}
-                  class="ml-2 text-gray-400 hover:text-blue-600"
-                  title="Edit title"
-                >
-                  <${Icons.EditIcon} className="w-3.5 h-3.5" />
-                </button>
               </div>
             `}
-        <button
-          onClick=${onDelete}
-          class="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-red-500 transition-all ml-2 flex-shrink-0"
-          title="Delete card"
-        >
-          <${Icons.TrashIcon} className="w-3.5 h-3.5" />
-        </button>
+        <div class="flex items-center space-x-2">
+          <button
+            onClick=${onEdit}
+            class="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-blue-500 transition-all flex-shrink-0"
+            title="Edit card configuration"
+          >
+            <${Icons.SettingsIcon} className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick=${onDelete}
+            class="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-red-500 transition-all flex-shrink-0"
+            title="Delete card"
+          >
+            <${Icons.TrashIcon} className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
       <div class="p-4">
         <div class="text-sm text-gray-500 mb-2 truncate">${card.dn}</div>
@@ -733,7 +817,7 @@ export function Card({ card, onDelete, onTitleUpdate }) {
           </div>
         </div>
         <div class="mt-3 text-xs text-gray-400 flex items-center">
-          <${Icons.ClockIcon} className="w-3 h-3 mr-1" />
+          <${Icons.ClockIcon} className="w-3.5 h-3.5 mr-1" />
           Last updated: ${formatTime(lastUpdate)}
         </div>
       </div>

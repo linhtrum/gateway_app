@@ -15,7 +15,7 @@
 #include "modbus/serial.h"
 #include "modbus/rtu_master.h"
 #include "modbus/device.h"
-
+#include "mqtt/mqtt.h"
 #define DBG_TAG "MAIN"
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
@@ -60,6 +60,9 @@ int main(int argc, char *argv[]) {
     // Initialize mqtt
     mqtt_init();
 
+    // Initialize mqtt topics
+    mqtt_topics_init();
+
     // Initialize network
     network_init();
 
@@ -77,7 +80,12 @@ int main(int argc, char *argv[]) {
         log_output_init(LOG_OUTPUT_WEBSOCKET);
     }
     // Initialize modbus master
-    start_rtu_master();
+    start_rtu_master_thread();
+
+    // Initialize MQTT
+    // if(mqtt_is_enabled()) {
+    //     mqtt_connect_async();
+    // }
 
     DBG_INFO("Application started");
 
