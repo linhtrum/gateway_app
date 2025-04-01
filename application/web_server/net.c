@@ -254,8 +254,8 @@ static void handle_network_set(struct mg_connection *c, struct mg_http_message *
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = network_save_config_from_json(json_str);
-    if (success) {
+    int result = db_write("network_config", (void*)json_str, strlen(json_str) + 1);
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to save network config\"}");
@@ -273,9 +273,9 @@ static void handle_system_set(struct mg_connection *c, struct mg_http_message *h
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = management_save_config_from_json(json_str);
+    int result = db_write("system_config", (void*)json_str, strlen(json_str) + 1);
     
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply system configuration\"}");
@@ -293,14 +293,14 @@ static void handle_devices_set(struct mg_connection *c, struct mg_http_message *
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = device_save_config_from_json(json_str);
+    int result = db_write("device_config", (void*)json_str, strlen(json_str) + 1);
+    free(json_str);
     
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply device configuration\"}");
     }
-    free(json_str);
 }
 
 static void handle_card_set(struct mg_connection *c, struct mg_http_message *hm) {
@@ -312,10 +312,10 @@ static void handle_card_set(struct mg_connection *c, struct mg_http_message *hm)
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = write_card_config(json_str);
+    int result = db_write("card_config", (void*)json_str, strlen(json_str) + 1);
     free(json_str);
     
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply card configuration\"}");
@@ -371,9 +371,9 @@ static void handle_event_set(struct mg_connection *c, struct mg_http_message *hm
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = event_save_config_from_json(json_str);
+    int result = db_write("event_config", (void*)json_str, strlen(json_str) + 1);
     
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply event configuration\"}");
@@ -381,10 +381,14 @@ static void handle_event_set(struct mg_connection *c, struct mg_http_message *hm
     free(json_str);
 }
 
-// Get serial configuration
-static void handle_serial_get(struct mg_connection *c) {
+static void handle_serial_get(struct mg_connection *c, int index) {
     char config_str[4096] = {0};
-    int read_len = db_read("serial_config", config_str, sizeof(config_str));
+    int read_len = 0;
+    if (index == 0) {
+        read_len = db_read("serial1_config", config_str, sizeof(config_str));
+    } else {
+        read_len = db_read("serial2_config", config_str, sizeof(config_str));
+    }
     if (read_len <= 0) {
         DBG_ERROR("Failed to read serial config from database");
         mg_http_reply(c, 200, s_json_header, "%s", "{}");
@@ -393,20 +397,24 @@ static void handle_serial_get(struct mg_connection *c) {
     mg_http_reply(c, 200, s_json_header, "%s", config_str);
 }
 
-// Set serial configuration
-static void handle_serial_set(struct mg_connection *c, struct mg_http_message *hm) {
+static void handle_serial_set(struct mg_connection *c, struct mg_http_message *hm, int index) {
     char *json_str = calloc(1, hm->body.len + 1);
     if (!json_str) {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
         return;
     }
     memcpy(json_str, hm->body.buf, hm->body.len);
-    json_str[hm->body.len] = '\0';  
+    json_str[hm->body.len] = '\0';
+    int result = 0;
 
-    bool success = serial_save_config_from_json(json_str);
+    if (index == 0) {
+        result = db_write("serial1_config", (void*)json_str, strlen(json_str) + 1);
+    } else {
+        result = db_write("serial2_config", (void*)json_str, strlen(json_str) + 1);
+    }
     free(json_str);
-    
-    if (success) {
+
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply serial configuration\"}");
@@ -435,10 +443,10 @@ static void handle_mqtt_set(struct mg_connection *c, struct mg_http_message *hm)
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = mqtt_save_config_from_json(json_str);
+    int result = db_write("mqtt_config", (void*)json_str, strlen(json_str) + 1);
     free(json_str);
 
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply mqtt configuration\"}");
@@ -465,10 +473,10 @@ static void handle_publish_set(struct mg_connection *c, struct mg_http_message *
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = pub_topic_save_config_from_json(json_str);
+    int result = db_write("publish_topics", (void*)json_str, strlen(json_str) + 1);
     free(json_str);
 
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply publish configuration\"}");
@@ -495,10 +503,10 @@ static void handle_subscribe_set(struct mg_connection *c, struct mg_http_message
     memcpy(json_str, hm->body.buf, hm->body.len);
     json_str[hm->body.len] = '\0';
 
-    bool success = sub_topic_save_config_from_json(json_str);
+    int result = db_write("subscribe_topics", (void*)json_str, strlen(json_str) + 1);
     free(json_str);
 
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply subscribe configuration\"}");
@@ -527,10 +535,10 @@ static void handle_report_set(struct mg_connection *c, struct mg_http_message *h
     json_str[hm->body.len] = '\0';
 
     // bool success = report_save_config_from_json(json_str);
-    bool success = true;
+    int result = db_write("report_config", (void*)json_str, strlen(json_str) + 1);
     free(json_str);
     
-    if (success) {
+    if (result == 0) {
         mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
     } else {
         mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply report configuration\"}");
@@ -607,10 +615,16 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             handle_factory_reset_set(c, hm);
         }
         else if (mg_match(hm->uri, mg_str("/api/serial/get"), NULL)) {
-            handle_serial_get(c);
+            handle_serial_get(c, 0);
         }
         else if (mg_match(hm->uri, mg_str("/api/serial/set"), NULL)) {
-            handle_serial_set(c, hm);
+            handle_serial_set(c, hm, 0);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/serial2/get"), NULL)) {
+            handle_serial_get(c, 1);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/serial2/set"), NULL)) {
+            handle_serial_set(c, hm, 1);
         }
         else if (mg_match(hm->uri, mg_str("/api/mqtt/get"), NULL)) {
             handle_mqtt_get(c);

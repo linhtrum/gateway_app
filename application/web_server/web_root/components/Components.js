@@ -1,4 +1,14 @@
-import { h, html, useState, useEffect } from "../bundle.js";
+import { h, html, useState, useEffect } from "../../bundle.js";
+import Home from "./pages/Home.js";
+import Network from "./pages/Network.js";
+import Devices from "./pages/Devices.js";
+import IOFunction from "./pages/IOFunction.js";
+import MQTT from "./pages/MQTT.js";
+import System from "./pages/System.js";
+import Serial from "./pages/Serial.js";
+import Logs from "./pages/Logs.js";
+import Login from "./pages/Login.js";
+import Status from "./pages/Status.js";
 
 export const Icons = {
   // Loading spinner icon
@@ -574,13 +584,23 @@ export function Sidebar({ currentRoute }) {
       icon: html`<${Icons.HomeIcon} className="w-5 h-5" />`,
     },
     {
+      path: "/status",
+      label: "Status",
+      icon: html`<${Icons.ClockIcon} className="w-5 h-5" />`,
+    },
+    {
       path: "/network",
       label: "Network",
       icon: html`<${Icons.NetworkIcon} className="w-5 h-5" />`,
     },
     {
-      path: "/serial",
-      label: "Serial",
+      path: "/serial1",
+      label: "Serial 1",
+      icon: html`<${Icons.SerialIcon} className="w-5 h-5" />`,
+    },
+    {
+      path: "/serial2",
+      label: "Serial 2",
       icon: html`<${Icons.SerialIcon} className="w-5 h-5" />`,
     },
     {
@@ -824,3 +844,40 @@ export function Card({ card, onDelete, onTitleUpdate, onEdit }) {
     </div>
   `;
 }
+
+const navigation = [
+  { name: "Home", href: "/", icon: "home" },
+  { name: "Status", href: "/status", icon: "chart-bar" },
+  { name: "Network", href: "/network", icon: "network-wired" },
+  { name: "Devices", href: "/devices", icon: "server" },
+  { name: "IO Function", href: "/io-function", icon: "cog" },
+  { name: "MQTT", href: "/mqtt", icon: "cloud" },
+  { name: "System", href: "/system", icon: "cogs" },
+  { name: "Serial", href: "/serial", icon: "terminal" },
+  { name: "Logs", href: "/logs", icon: "clipboard-list" },
+];
+
+const renderContent = () => {
+  switch (currentPath) {
+    case "/":
+      return html`<${Home} />`;
+    case "/status":
+      return html`<${Status} />`;
+    case "/network":
+      return html`<${Network} />`;
+    case "/devices":
+      return html`<${Devices} />`;
+    case "/io-function":
+      return html`<${IOFunction} />`;
+    case "/mqtt":
+      return html`<${MQTT} />`;
+    case "/system":
+      return html`<${System} />`;
+    case "/serial":
+      return html`<${Serial} />`;
+    case "/logs":
+      return html`<${Logs} />`;
+    default:
+      return html`<${Home} />`;
+  }
+};

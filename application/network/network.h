@@ -37,9 +37,6 @@ char* network_config_to_json(void);
 // Get current network information from system
 bool network_get_current_info(void);
 
-// Save network configuration from JSON
-bool network_save_config_from_json(const char *json_str);
-
 // Set static IP configuration
 bool network_set_static_ip(const char *interface, const char *ip, const char *subnet, 
                           const char *gateway, const char *dns1, const char *dns2);

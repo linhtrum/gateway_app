@@ -15,6 +15,7 @@ static void free_device_groups(device_t *device);
 static void free_node(node_t *node) {
     if (!node) return;
     free(node->name);
+    free(node->formula);
     free(node);
 }
 
@@ -34,6 +35,7 @@ static void free_device(device_t *device) {
     free_device_groups(device);
     
     free(device->name);
+    free(device->server_address);
     free(device);
 }
 
@@ -77,6 +79,11 @@ static node_t* parse_nodes(cJSON *nodes_array) {
         cJSON *func = cJSON_GetObjectItem(node_obj, "f");
         cJSON *data_type = cJSON_GetObjectItem(node_obj, "dt");
         cJSON *timeout = cJSON_GetObjectItem(node_obj, "t");
+        cJSON *enable_report = cJSON_GetObjectItem(node_obj, "er");
+        cJSON *var_range = cJSON_GetObjectItem(node_obj, "vr");
+        cJSON *enable_map = cJSON_GetObjectItem(node_obj, "em");
+        cJSON *mapped_addr = cJSON_GetObjectItem(node_obj, "ma");
+        cJSON *formula = cJSON_GetObjectItem(node_obj, "f");
 
         if (name && name->valuestring) {
             new_node->name = strdup(name->valuestring);
@@ -94,6 +101,29 @@ static node_t* parse_nodes(cJSON *nodes_array) {
             new_node->timeout = timeout->valueint;
         } else {
             new_node->timeout = MODBUS_RTU_TIMEOUT; // Default timeout of 1 second
+        }
+        if (enable_report) {
+            new_node->enable_reporting = cJSON_IsTrue(enable_report);
+        } else {
+            new_node->enable_reporting = false;
+        }
+        if (var_range) {
+            new_node->variation_range = var_range->valueint;
+        } else {
+            new_node->variation_range = 0; // Default to no variation range
+        }
+        if (enable_map) {
+            new_node->enable_mapping = cJSON_IsTrue(enable_map);
+        } else {
+            new_node->enable_mapping = false;
+        }
+        if (mapped_addr) {
+            new_node->mapped_address = mapped_addr->valueint;
+        } else {
+            new_node->mapped_address = new_node->address; // Default to original address
+        }
+        if (formula && formula->valuestring) {
+            new_node->formula = strdup(formula->valuestring);
         }
 
         if (!head) {
@@ -219,17 +249,7 @@ static void create_node_groups(device_t *device) {
     device->groups = groups;
 }
 
-bool device_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-    
-    bool success = (db_write("device_config", json_str, strlen(json_str) + 1) == 0);
-    return success;
-}
-
-// Get device configuration from database and parse JSON
+// Parse device configuration from JSON
 device_t* load_device_config(void) {
     device_t *head = NULL;
     device_t *current = NULL;
@@ -264,6 +284,12 @@ device_t* load_device_config(void) {
         cJSON *polling_interval = cJSON_GetObjectItem(device_obj, "pi");
         cJSON *group_mode = cJSON_GetObjectItem(device_obj, "g");
         cJSON *nodes = cJSON_GetObjectItem(device_obj, "ns");
+        cJSON *port = cJSON_GetObjectItem(device_obj, "p");
+        cJSON *protocol = cJSON_GetObjectItem(device_obj, "pr");
+        cJSON *server_addr = cJSON_GetObjectItem(device_obj, "sa");
+        cJSON *server_port = cJSON_GetObjectItem(device_obj, "sp");
+        cJSON *enable_map = cJSON_GetObjectItem(device_obj, "em");
+        cJSON *mapped_addr = cJSON_GetObjectItem(device_obj, "ma");
 
         if (name && name->valuestring) {
             new_device->name = strdup(name->valuestring);
@@ -280,6 +306,28 @@ device_t* load_device_config(void) {
             new_device->group_mode = group_mode->valueint != 0;
         } else {
             new_device->group_mode = false;  // Default to basic polling mode
+        }
+        if (port) {
+            new_device->port = port->valueint;
+        }
+        if (protocol) {
+            new_device->protocol = (protocol_t)protocol->valueint;
+        } else {
+            new_device->protocol = PROTOCOL_MODBUS; // Default to RTU
+        }
+        if (server_addr && server_addr->valuestring) {
+            new_device->server_address = strdup(server_addr->valuestring);
+        }
+        if (server_port) {
+            new_device->server_port = server_port->valueint;
+        }
+        if (enable_map) {
+            new_device->enable_mapping = cJSON_IsTrue(enable_map);
+        } else {
+            new_device->enable_mapping = false;
+        }
+        if (mapped_addr) {
+            new_device->mapped_slave_addr = mapped_addr->valueint;
         }
         if (nodes) {
             new_device->nodes = parse_nodes(nodes);
@@ -303,15 +351,38 @@ device_t* load_device_config(void) {
     // Log the parsed configuration
     device_t *device = head;
     while (device) {
-        DBG_INFO("Device: %s (addr: %d, interval: %dms, group mode: %d)", 
+        DBG_INFO("Device: %s (addr: %d, interval: %dms, group mode: %d, port: %d, protocol: %d)", 
                  device->name, device->device_addr, 
-                 device->polling_interval, device->group_mode);
+                 device->polling_interval, device->group_mode,
+                 device->port, device->protocol);
+        
+        if (device->port == 3) {
+            DBG_INFO("  TCP Settings: %s:%d", device->server_address ? device->server_address : "not set", 
+                     device->server_port);
+        }
+        
+        if (device->enable_mapping) {
+            DBG_INFO("  Address Mapping: %d -> %d", device->device_addr, device->mapped_slave_addr);
+        }
         
         node_t *node = device->nodes;
         while (node) {
             DBG_INFO("  Node: %s (addr: %d, func: %d, type: %d, timeout: %dms)",
                      node->name, node->address, node->function,
                      node->data_type, node->timeout);
+            
+            if (node->enable_reporting) {
+                DBG_INFO("    Reporting: enabled, variation range: %d", node->variation_range);
+            }
+            
+            if (node->enable_mapping) {
+                DBG_INFO("    Address Mapping: %d -> %d", node->address, node->mapped_address);
+            }
+            
+            if (node->formula) {
+                DBG_INFO("    Formula: %s", node->formula);
+            }
+            
             node = node->next;
         }
         device = device->next;
@@ -329,77 +400,6 @@ void free_device_config(device_t *config) {
         current = next;
     }
 }
-
-// Convert device configuration to JSON string
-char *device_config_to_json(void) {
-    cJSON *root = cJSON_CreateArray();
-    if (!root) {
-        DBG_ERROR("Failed to create JSON array");
-        return NULL;
-    }
-
-    device_t *device = g_device_data;
-    while (device) {
-        cJSON *device_obj = cJSON_CreateObject();
-        if (!device_obj) {
-            DBG_ERROR("Failed to create device JSON object");
-            cJSON_Delete(root);
-            return NULL;
-        }
-
-        // Add device properties
-        cJSON_AddStringToObject(device_obj, "n", device->name);
-        cJSON_AddNumberToObject(device_obj, "da", device->device_addr);
-        cJSON_AddNumberToObject(device_obj, "pi", device->polling_interval);
-        cJSON_AddBoolToObject(device_obj, "g", device->group_mode);
-
-        // Create nodes array
-        cJSON *nodes_array = cJSON_CreateArray();
-        if (!nodes_array) {
-            DBG_ERROR("Failed to create nodes array");
-            cJSON_Delete(device_obj);
-            cJSON_Delete(root);
-            return NULL;
-        }
-
-        // Add each node
-        node_t *node = device->nodes;
-        while (node) {
-            cJSON *node_obj = cJSON_CreateObject();
-            if (!node_obj) {
-                DBG_ERROR("Failed to create node JSON object");
-                cJSON_Delete(nodes_array);
-                cJSON_Delete(device_obj);
-                cJSON_Delete(root);
-                return NULL;
-            }
-
-            cJSON_AddStringToObject(node_obj, "n", node->name);
-            cJSON_AddNumberToObject(node_obj, "a", node->address);
-            cJSON_AddNumberToObject(node_obj, "f", node->function);
-            cJSON_AddNumberToObject(node_obj, "dt", node->data_type);
-            cJSON_AddNumberToObject(node_obj, "t", node->timeout);
-
-            cJSON_AddItemToArray(nodes_array, node_obj);
-            node = node->next;
-        }
-
-        cJSON_AddItemToObject(device_obj, "ns", nodes_array);
-        cJSON_AddItemToArray(root, device_obj);
-        device = device->next;
-    }
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        DBG_ERROR("Failed to convert device config to JSON string");
-        return NULL;
-    }
-
-    return json_str;
-}
-
 
 void device_init(void) {
     device_t *config = load_device_config();    

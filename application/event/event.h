@@ -39,9 +39,6 @@ typedef struct {
 void event_init(void);
 void event_deinit(void);
 
-bool event_save_config_from_json(const char *json_str);
-char *event_config_to_json(void);
-
 event_config_t* event_get_config(void);
 int event_get_count(void);
 

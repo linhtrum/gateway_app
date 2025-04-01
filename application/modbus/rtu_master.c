@@ -5,13 +5,15 @@
 #include <time.h>
 #include "rtu_master.h"
 #include "agile_modbus.h"
-#include "serial.h"
 #include "cJSON.h"
 #include "db.h"
 #include "../web_server/net.h"
 #include "../web_server/websocket.h"
 #include "../log/log_output.h"
 #include "../system/management.h"
+
+#include "serial.h"
+#include "tcp.h"
 
 #define DBG_TAG "RTU_MASTER"
 #define DBG_LVL LOG_INFO
@@ -23,6 +25,49 @@
 static int method_ws_log = 0; 
 
 static char* build_node_json(const char *node_name, node_t *node);
+
+
+static int rtu_master_send(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout)
+{
+    int send_len;
+
+    if(port <= 1)
+    {
+        send_len = serial_write(fd, buf, len);
+    }
+    else
+    {
+        send_len = tcp_write(fd, buf, len);
+    }
+    return send_len;
+}
+
+static int rtu_master_receive(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout)
+{
+    int read_len;
+
+    if(port <= 1)
+    {
+        read_len = serial_read(fd, buf, len, timeout, byte_timeout);
+    }
+    else
+    {
+        read_len = tcp_read(fd, buf, len, timeout, byte_timeout);
+    }
+    return read_len;
+}
+
+static void rtu_master_flush_rx(int port, int fd)
+{
+    if(port <= 1)
+    {
+        serial_flush_rx(fd);
+    }
+    else
+    {
+        tcp_flush_rx(fd);
+    }
+}
 
 // Convert raw data based on data type with bounds checking
 static int convert_node_value(node_t *node, uint16_t *raw_data) {
@@ -158,15 +203,15 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     // Send request
-    serial_flush(fd);
-    int send_len = serial_write(fd, ctx->send_buf, rc);
+    rtu_master_flush_rx(device->port, fd);
+    int send_len = rtu_master_send(device->port, fd, ctx->send_buf, rc, node->timeout, 10);
     if (send_len != rc) {
         DBG_ERROR("Failed to send request for node %s", node->name);
         return RTU_MASTER_ERROR;
     }
 
     // Read response with node-specific timeout
-    int read_len = serial_receive(fd, ctx->read_buf, ctx->read_bufsz, node->timeout);
+    int read_len = rtu_master_receive(device->port, fd, ctx->read_buf, ctx->read_bufsz, node->timeout, 10);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for node %s (timeout: %dms)", 
                  node->name, node->timeout);
@@ -287,8 +332,8 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Send request
-    serial_flush(fd);
-    int send_len = serial_write(fd, ctx->send_buf, rc);
+    rtu_master_flush_rx(device->port, fd);
+    int send_len = rtu_master_send(device->port, fd, ctx->send_buf, rc, MODBUS_RTU_TIMEOUT, 10);
     if (send_len != rc) {
         DBG_ERROR("Failed to send request for group (function: %d, start: %d)",
                  group->function, group->start_address);
@@ -296,8 +341,8 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Read response
-    int read_len = serial_receive(fd, ctx->read_buf, ctx->read_bufsz, 
-                             MODBUS_RTU_TIMEOUT);
+    int read_len = rtu_master_receive(device->port, fd, ctx->read_buf, ctx->read_bufsz, 
+                             MODBUS_RTU_TIMEOUT, 10);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
                  group->function, group->start_address);
@@ -341,7 +386,7 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
             if (node->function == 1 || node->function == 2) {
                 // For bit functions, offset is in bits but data is in bytes
                 data_ptr = (uint16_t *)&((uint8_t *)group->data_buffer)[node->offset];
-            } else {
+        } else {
                 // For register functions, offset is in registers
                 data_ptr = &group->data_buffer[node->offset];
             }
@@ -432,39 +477,39 @@ static char* build_node_json(const char *node_name, node_t *node) {
     cJSON_AddStringToObject(root, "type", "update");
     
     // Add node name
-    cJSON_AddStringToObject(root, "n", node_name);
+    cJSON_AddStringToObject(root, "name", node_name);
 
     // Add value based on data type
     switch (node->data_type) {
         case DATA_TYPE_BOOLEAN:
-            cJSON_AddBoolToObject(root, "v", node->value.bool_val);
+            cJSON_AddBoolToObject(root, "value", node->value.bool_val);
             break;
         case DATA_TYPE_INT8:
-            cJSON_AddNumberToObject(root, "v", node->value.int8_val);
+            cJSON_AddNumberToObject(root, "value", node->value.int8_val);
             break;
         case DATA_TYPE_UINT8:
-            cJSON_AddNumberToObject(root, "v", node->value.uint8_val);
+            cJSON_AddNumberToObject(root, "value", node->value.uint8_val);
             break;
         case DATA_TYPE_INT16:
-            cJSON_AddNumberToObject(root, "v", node->value.int16_val);
+            cJSON_AddNumberToObject(root, "value", node->value.int16_val);
             break;
         case DATA_TYPE_UINT16:
-            cJSON_AddNumberToObject(root, "v", node->value.uint16_val);
+            cJSON_AddNumberToObject(root, "value", node->value.uint16_val);
             break;
         case DATA_TYPE_INT32_ABCD:
         case DATA_TYPE_INT32_CDAB:
-            cJSON_AddNumberToObject(root, "v", node->value.int32_val);
+            cJSON_AddNumberToObject(root, "value", node->value.int32_val);
             break;
         case DATA_TYPE_UINT32_ABCD:
         case DATA_TYPE_UINT32_CDAB:
-            cJSON_AddNumberToObject(root, "v", node->value.uint32_val);
+            cJSON_AddNumberToObject(root, "value", node->value.uint32_val);
             break;
         case DATA_TYPE_FLOAT_ABCD:
         case DATA_TYPE_FLOAT_CDAB:
-            cJSON_AddNumberToObject(root, "v", node->value.float_val);
+            cJSON_AddNumberToObject(root, "value", node->value.float_val);
             break;
         case DATA_TYPE_DOUBLE:
-            cJSON_AddNumberToObject(root, "v", node->value.double_val);
+            cJSON_AddNumberToObject(root, "value", node->value.double_val);
             break;
         default:
             DBG_ERROR("Unsupported data type: %d", node->data_type);
@@ -484,123 +529,136 @@ static char* build_node_json(const char *node_name, node_t *node) {
     return json_str;
 }
 
-// Initialize Modbus RTU master with improved error handling
-int rtu_master_init(const char *port, int baud, int data_bits, int stop_bits, int parity, int flow_control) {
-    if (!port) {
-        DBG_ERROR("Invalid port parameter");
-        return RTU_MASTER_INVALID;
-    }
-
-    int fd = serial_open(port, baud, data_bits, stop_bits, parity, flow_control);
-    if (fd < 0) {
-        DBG_ERROR("Failed to open serial port %s at %d baud", port, baud);
-        return RTU_MASTER_ERROR;
-    }
-       
-    DBG_INFO("Modbus RTU master initialized on %s at %d baud", port, baud);
-    return fd;
-}
-
-void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
-    if (!config || fd < 0 || !ctx) {
+void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *current_device) {
+    if (!current_device || fd < 0 || !ctx) {
         DBG_ERROR("Invalid parameters for polling");
         return;
     }
 
-    device_t *current_device = config;
-    while (current_device) {
-        DBG_INFO("Polling device: %s (interval: %dms, mode: %s)", 
-                 current_device->name, 
-                 current_device->polling_interval,
-                 current_device->group_mode ? "group" : "basic");
-        
-        agile_modbus_set_slave(ctx, current_device->device_addr);
-        
-        if (current_device->group_mode) {
-            // Poll each group
-            node_group_t *current_group = current_device->groups;
-            while (current_group) {
-                int result = poll_group_node(ctx, fd, current_device, current_group);
-                if (result != RTU_MASTER_OK) {
-                    DBG_ERROR("Failed to poll group %d (error: %d)", 
-                             current_group->function, result);
-                }
-                // Sleep after each group poll
-                usleep(current_device->polling_interval * 1000);
-                current_group = current_group->next;
+    DBG_INFO("Polling device: %s (interval: %dms, mode: %s)", 
+                current_device->name, 
+                current_device->polling_interval,
+                current_device->group_mode ? "group" : "basic");
+    
+    agile_modbus_set_slave(ctx, current_device->device_addr);
+    
+    if (current_device->group_mode) {
+        // Poll each group
+        node_group_t *current_group = current_device->groups;
+        while (current_group) {
+            int result = poll_group_node(ctx, fd, current_device, current_group);
+            if (result != RTU_MASTER_OK) {
+                DBG_ERROR("Failed to poll group %d (error: %d)", 
+                            current_group->function, result);
             }
-        } else {
-            // Basic polling mode - poll each node individually
-            node_t *current_node = current_device->nodes;
-            while (current_node) {
-                int result = poll_single_node(ctx, fd, current_device, current_node);
-                if (result != RTU_MASTER_OK) {
-                    DBG_ERROR("Failed to poll node %s (error: %d)", 
-                             current_node->name, result);
-                    current_node->is_ok = false;
-                }
-                else {
-                    current_node->is_ok = true;
-                }
-                // Sleep after each node poll
-                usleep(current_device->polling_interval * 1000);
-                current_node = current_node->next;
-            }
+            // Sleep after each group poll
+            usleep(current_device->polling_interval * 1000);
+            current_group = current_group->next;
         }
-        
-        current_device = current_device->next;
+    } else {
+        // Basic polling mode - poll each node individually
+        node_t *current_node = current_device->nodes;
+        while (current_node) {
+            int result = poll_single_node(ctx, fd, current_device, current_node);
+            if (result != RTU_MASTER_OK) {
+                DBG_ERROR("Failed to poll node %s (error: %d)", 
+                            current_node->name, result);
+                current_node->is_ok = false;
+            }
+            else {
+                current_node->is_ok = true;
+            }
+            // Sleep after each node poll
+            usleep(current_device->polling_interval * 1000);
+            current_node = current_node->next;
+        }
     }
 }
 
 static void *rtu_master_thread(void *arg) {
-    int fd;
     uint8_t master_send_buf[MODBUS_MAX_ADU_LENGTH];
     uint8_t master_recv_buf[MODBUS_MAX_ADU_LENGTH];
 
     agile_modbus_rtu_t ctx_rtu;
-    agile_modbus_t *ctx = &ctx_rtu._ctx;
+    agile_modbus_tcp_t ctx_tcp;
+    agile_modbus_t *ctx = NULL;
+    int tcp_fd = -1;
+    int serial_fd = -1;
 
-    agile_modbus_rtu_init(&ctx_rtu, master_send_buf, sizeof(master_send_buf),
-                         master_recv_buf, sizeof(master_recv_buf));
-    
     device_t *device_config = device_get_config();
     if (!device_config) {
         DBG_ERROR("Invalid configuration for RTU master thread");
         goto exit;
     }
 
-    // Initialize serial port
-    serial_config_t *serial_config = serial_get_config();
-    if (!serial_config) {
-        DBG_ERROR("Invalid serial configuration");
-        goto exit;
-    }
-
-    fd = rtu_master_init(serial_config->port, serial_config->baud_rate, 
-                        serial_config->data_bits, serial_config->stop_bits, 
-                        serial_config->parity, serial_config->flow_control);
-    if (fd < 0) {
-        DBG_ERROR("Failed to initialize RTU master");
-        goto exit;
-    }
-
     DBG_INFO("RTU master polling thread started");
-
     method_ws_log = management_get_log_method();
 
     // Run continuously
     while (1) {
-        // Poll all devices (each device handles its own polling interval)
-        rtu_master_poll(ctx, fd, device_config);
+        device_t *current_device = device_config;
+        while (current_device) {
+            // Initialize appropriate context based on port
+            if (current_device->port <= 1) {
+                // RTU mode for ports 0 and 1
+                if (!ctx || ctx != &ctx_rtu._ctx) {
+                    agile_modbus_rtu_init(&ctx_rtu, master_send_buf, sizeof(master_send_buf),
+                                        master_recv_buf, sizeof(master_recv_buf));
+                    ctx = &ctx_rtu._ctx;
+                }
+                if (serial_fd < 0) {    
+                    serial_fd = serial_open(current_device->port);  
+                    if (serial_fd < 0) {
+                        DBG_ERROR("Failed to open serial port %d", current_device->port);
+                    current_device = current_device->next;
+                        continue;
+                    }
+                }
+                // Poll device using RTU context
+                rtu_master_poll(ctx, serial_fd, current_device);
+                serial_close(serial_fd);
+                serial_fd = -1;
+            } else if (current_device->port == 3) {
+                // TCP mode for port 3
+                if (!ctx || ctx != &ctx_tcp._ctx) {
+                    agile_modbus_tcp_init(&ctx_tcp, master_send_buf, sizeof(master_send_buf),
+                                        master_recv_buf, sizeof(master_recv_buf));
+                    ctx = &ctx_tcp._ctx;
+                }
+
+                // Connect to TCP server if not already connected
+                if (tcp_fd < 0) {
+                    tcp_fd = tcp_connect(current_device->server_address, current_device->server_port);
+                    if (tcp_fd < 0) {
+                        DBG_ERROR("Failed to connect to TCP server %s:%d", current_device->server_address, current_device->server_port);
+                        current_device = current_device->next;
+                        continue;
+                    }
+                }
+
+                // Poll device using TCP context
+                rtu_master_poll(ctx, tcp_fd, current_device);
+                tcp_close(tcp_fd);
+                tcp_fd = -1;
+            } else {
+                DBG_ERROR("Invalid port number: %d", current_device->port);
+            }
+
+            current_device = current_device->next;
+        }
     }
 
-    exit:
-    if(device_config) {
+exit:
+    if (device_config) {
         free_device_config(device_config);
     }
 
-    if(fd >= 0) {
-        serial_close(fd);
+    if (serial_fd >= 0) {
+        serial_close(serial_fd);
+    }
+
+    if (tcp_fd >= 0) {
+        close(tcp_fd);
     }
 
     return NULL;

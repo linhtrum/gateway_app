@@ -24,16 +24,4 @@ void management_init(void);
 // Get current system management configuration
 const struct system_management_config* management_get_config(void);
 
-// Update system management configuration from JSON
-bool management_update_config(const char *json_str);
-
-// Convert system management configuration to JSON string
-char* management_config_to_json(void);
-
-// Save system management configuration to database
-bool management_save_config(void);
-
-// Load system management configuration from database
-bool management_load_config(void);
-
 #endif /* MANAGEMENT_H */

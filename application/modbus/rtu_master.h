@@ -9,6 +9,7 @@
 #include "device.h"
 
 #define MODBUS_MAX_ADU_LENGTH 256
+#define MODBUS_RTU_TIMEOUT 1000
 
 // Error codes
 #define RTU_MASTER_OK          0

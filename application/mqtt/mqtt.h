@@ -61,7 +61,6 @@ typedef struct {
 // MQTT configuration functions
 void mqtt_init(void);
 mqtt_config_t* mqtt_get_config(void);
-bool mqtt_save_config_from_json(const char *json_str);
 
 // Check if MQTT is enabled
 bool mqtt_is_enabled(void);
@@ -72,7 +71,5 @@ void mqtt_topics_init(void);
 // Get MQTT topics
 mqtt_topics_t* mqtt_get_topics(void);
 
-bool pub_topic_save_config_from_json(const char *json_str);
-bool sub_topic_save_config_from_json(const char *json_str);
 
 #endif

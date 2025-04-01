@@ -334,17 +334,6 @@ bool network_get_current_info(void) {
     return success;
 }
 
-// Save network configuration from JSON
-bool network_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    bool success = (db_write("network_config", json_str, strlen(json_str) + 1) == 0);
-    return success;
-}
-
 // Set static IP configuration
 bool network_set_static_ip(const char *interface, const char *ip, const char *subnet, 
                           const char *gateway, const char *dns1, const char *dns2) {

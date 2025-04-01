@@ -46,7 +46,9 @@ SRCS = application/main.c \
 		application/network/network.c \
 		application/system/management.c \
 		application/mqtt/mqtt.c \
-		application/mqtt/mqtt_handle.c
+		application/mqtt/mqtt_handle.c \
+		application/modbus/tcp.c
+		
 OBJS = $(SRCS:.c=.o)
 
 run: clean all

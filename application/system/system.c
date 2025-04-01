@@ -59,8 +59,8 @@ static void handle_network_update(const char *json_str) {
         return;
     }
 
-    bool success = network_save_config_from_json(json_str);
-    if (success) {
+    int result = db_write("network_config", (void*)json_str, strlen(json_str) + 1);
+    if (result == 0) {
         DBG_INFO("Network config updated successfully");
     } else {
         DBG_ERROR("Failed to update network config");

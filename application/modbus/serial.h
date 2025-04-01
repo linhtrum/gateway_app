@@ -15,20 +15,30 @@ typedef struct {
     int flow_control;       // "flowControl": Flow control setting (0: none, 1: hardware, 2: software)
     int timeout;            // "timeout": Read timeout in milliseconds
     int buffer_size;        // "bufferSize": Buffer size for read/write operations
+    int fd;                 // File descriptor for the serial port
+    bool is_open;          // Port open status
+    
+    // Buffer management
+    uint8_t *write_buffer;  // Buffer for write operations
+    int write_buffer_pos;   // Current position in write buffer
+    int last_write_time;    // Last write operation timestamp
 } serial_config_t;
+
+#define MAX_SERIAL_PORTS 2
+#define MAX_BUFFER_SIZE 1460  // Maximum buffer size for any port
 
 // Serial configuration functions
 void serial_init(void);
-serial_config_t* serial_get_config(void);
-bool serial_update_config(const char *json_str);
-bool serial_save_config_from_json(const char *json_str);
+serial_config_t* serial_get_config(int port_index);
+
 // Serial port functions
-int serial_open(const char *port, int baud, int data_bits, int stop_bits, 
-                int parity, int flow_control);
-int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout);
-int serial_read(int fd, uint8_t *buf, int len, int timeout_ms);
-int serial_write(int fd, const uint8_t *buf, int len);
-void serial_flush(int fd);
-void serial_close(int fd);
+int serial_open(int port_index);
+// int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout);
+int serial_read(int port_index, uint8_t *buf, int len, int timeout_ms, int byte_timeout_ms);
+int serial_write(int port_index, const uint8_t *buf, int len);
+void serial_flush(int port_index);
+void serial_flush_rx(int port_index);
+void serial_close(int port_index);
+void serial_close_all(void);
 
 #endif

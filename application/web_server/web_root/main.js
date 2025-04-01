@@ -6,11 +6,13 @@ import Login from "./components/pages/Login.js";
 import Home from "./components/pages/Home.js";
 import Network from "./components/pages/Network.js";
 import Serial from "./components/pages/Serial.js";
+import Serial2 from "./components/pages/Serial2.js";
 import MQTT from "./components/pages/MQTT.js";
 import Devices from "./components/pages/Devices.js";
 import System from "./components/pages/System.js";
 import Logs from "./components/pages/Logs.js";
 import IOFunction from "./components/pages/IOFunction.js";
+import Status from "./components/pages/Status.js";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -22,9 +24,9 @@ function App() {
 
   useEffect(() => fetch("/api/login").then(login), []);
 
-  // if (!user) {
-  //   return html` <${Login} onLogin=${login} /> `;
-  // }
+  if (!user) {
+    return html` <${Login} onLogin=${login} /> `;
+  }
 
   // If user is logged in, show main application
   return html`
@@ -36,8 +38,10 @@ function App() {
           <${Router} onChange=${(ev) =>
     setUrl(ev.url)} history=${History.createHashHistory()}>
             <${Home} default=${true} />
+            <${Status} path="/status" />
             <${Network} path="/network" />
-            <${Serial} path="/serial" />
+            <${Serial} path="/serial1" />
+            <${Serial2} path="/serial2" />
             <${MQTT} path="/mqtt" />
             <${Devices} path="/devices" />
             <${System} path="/system" />

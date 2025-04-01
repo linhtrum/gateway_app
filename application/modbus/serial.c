@@ -7,6 +7,7 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <errno.h>
+#include <time.h>
 #include "cJSON.h"
 #include "db.h"
 
@@ -14,13 +15,122 @@
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
 
-// Static serial configuration
-static serial_config_t g_serial_config = {0};
+
+// Static serial configuration array
+static serial_config_t g_serial_configs[MAX_SERIAL_PORTS] = {0};
+
+// Get current timestamp in milliseconds
+static int get_current_time_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+}
+
+// Get serial configuration by index
+static serial_config_t* get_serial_config(int index) {
+    if (index < 0 || index >= MAX_SERIAL_PORTS) {
+        return NULL;
+    }
+    return &g_serial_configs[index];
+}
+
+// Find available serial port slot
+static int find_available_port(void) {
+    for (int i = 0; i < MAX_SERIAL_PORTS; i++) {
+        if (!g_serial_configs[i].is_open) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Find serial port by name
+static int find_port_by_name(const char *port_name) {
+    for (int i = 0; i < MAX_SERIAL_PORTS; i++) {
+        if (g_serial_configs[i].is_open && 
+            strcmp(g_serial_configs[i].port, port_name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Find port index by file descriptor
+static int find_port_by_fd(int fd) {
+    for (int i = 0; i < MAX_SERIAL_PORTS; i++) {
+        if (g_serial_configs[i].fd == fd) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Allocate write buffer for a port
+static bool allocate_write_buffer(serial_config_t *config) {
+    if (!config || config->write_buffer) {
+        return false;
+    }
+
+    config->write_buffer = (uint8_t *)malloc(config->buffer_size);
+    if (!config->write_buffer) {
+        DBG_ERROR("Failed to allocate write buffer");
+        return false;
+    }
+
+    config->write_buffer_pos = 0;
+    config->last_write_time = get_current_time_ms();
+    return true;
+}
+
+// Free write buffer for a port
+static void free_write_buffer(serial_config_t *config) {
+    if (config && config->write_buffer) {
+        free(config->write_buffer);
+        config->write_buffer = NULL;
+        config->write_buffer_pos = 0;
+    }
+}
+
+// Flush write buffer to serial port
+static int flush_write_buffer(serial_config_t *config) {
+    if (!config || !config->write_buffer || config->write_buffer_pos == 0) {
+        return 0;
+    }
+
+    int ret = write(config->fd, config->write_buffer, config->write_buffer_pos);
+    if (ret > 0) {
+        config->write_buffer_pos = 0;
+        config->last_write_time = get_current_time_ms();
+        tcdrain(config->fd);  // Wait for all data to be transmitted
+    }
+    return ret;
+}
+
+// Check if write buffer should be flushed based on conditions
+static bool should_flush_buffer(serial_config_t *config) {
+    if (!config || !config->write_buffer) {
+        return false;
+    }
+
+    // Check buffer size condition
+    if (config->write_buffer_pos >= config->buffer_size) {
+        return true;
+    }
+
+    // Check timeout condition
+    int current_time = get_current_time_ms();
+    if (config->write_buffer_pos > 0 && 
+        (current_time - config->last_write_time) >= config->timeout) {
+        return true;
+    }
+
+    return false;
+}
 
 // Parse serial configuration from JSON
-static bool parse_serial_config(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
+static bool parse_serial_config(const char *json_str, serial_config_t *config) {
+    if (!json_str || !config) {
+        DBG_ERROR("Invalid parameters");
         return false;
     }
 
@@ -33,47 +143,47 @@ static bool parse_serial_config(const char *json_str) {
     // Parse configuration fields
     cJSON *enabled = cJSON_GetObjectItem(root, "enabled");
     if (enabled) {
-        g_serial_config.enabled = cJSON_IsTrue(enabled);
+        config->enabled = cJSON_IsTrue(enabled);
     }
 
     cJSON *port = cJSON_GetObjectItem(root, "port");
     if (port && port->valuestring) {
-        strncpy(g_serial_config.port, port->valuestring, sizeof(g_serial_config.port) - 1);
+        strncpy(config->port, port->valuestring, sizeof(config->port) - 1);
     }
 
     cJSON *baud_rate = cJSON_GetObjectItem(root, "baudRate");
     if (baud_rate) {
-        g_serial_config.baud_rate = baud_rate->valueint;
+        config->baud_rate = baud_rate->valueint;
     }
 
     cJSON *data_bits = cJSON_GetObjectItem(root, "dataBits");
     if (data_bits) {
-        g_serial_config.data_bits = data_bits->valueint;
+        config->data_bits = data_bits->valueint;
     }
 
     cJSON *stop_bits = cJSON_GetObjectItem(root, "stopBits");
     if (stop_bits) {
-        g_serial_config.stop_bits = stop_bits->valueint;
+        config->stop_bits = stop_bits->valueint;
     }
 
     cJSON *parity = cJSON_GetObjectItem(root, "parity");
     if (parity) {
-        g_serial_config.parity = parity->valueint;
+        config->parity = parity->valueint;
     }
 
     cJSON *flow_control = cJSON_GetObjectItem(root, "flowControl");
     if (flow_control) {
-        g_serial_config.flow_control = flow_control->valueint;
+        config->flow_control = flow_control->valueint;
     }
 
     cJSON *timeout = cJSON_GetObjectItem(root, "timeout");
     if (timeout) {
-        g_serial_config.timeout = timeout->valueint;
+        config->timeout = timeout->valueint;
     }
 
     cJSON *buffer_size = cJSON_GetObjectItem(root, "bufferSize");
     if (buffer_size) {
-        g_serial_config.buffer_size = buffer_size->valueint;
+        config->buffer_size = buffer_size->valueint;
     }
 
     cJSON_Delete(root);
@@ -81,22 +191,27 @@ static bool parse_serial_config(const char *json_str) {
 }
 
 // Convert serial configuration to JSON string
-static char* serial_config_to_json(void) {
+static char* serial_config_to_json(const serial_config_t *config) {
+    if (!config) {
+        DBG_ERROR("Invalid configuration");
+        return NULL;
+    }
+
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         DBG_ERROR("Failed to create JSON object");
         return NULL;
     }
 
-    cJSON_AddBoolToObject(root, "enabled", g_serial_config.enabled);
-    cJSON_AddStringToObject(root, "port", g_serial_config.port);
-    cJSON_AddNumberToObject(root, "baudRate", g_serial_config.baud_rate);
-    cJSON_AddNumberToObject(root, "dataBits", g_serial_config.data_bits);
-    cJSON_AddNumberToObject(root, "stopBits", g_serial_config.stop_bits);
-    cJSON_AddNumberToObject(root, "parity", g_serial_config.parity);
-    cJSON_AddNumberToObject(root, "flowControl", g_serial_config.flow_control);
-    cJSON_AddNumberToObject(root, "timeout", g_serial_config.timeout);
-    cJSON_AddNumberToObject(root, "bufferSize", g_serial_config.buffer_size);
+    cJSON_AddBoolToObject(root, "enabled", config->enabled);
+    cJSON_AddStringToObject(root, "port", config->port);
+    cJSON_AddNumberToObject(root, "baudRate", config->baud_rate);
+    cJSON_AddNumberToObject(root, "dataBits", config->data_bits);
+    cJSON_AddNumberToObject(root, "stopBits", config->stop_bits);
+    cJSON_AddNumberToObject(root, "parity", config->parity);
+    cJSON_AddNumberToObject(root, "flowControl", config->flow_control);
+    cJSON_AddNumberToObject(root, "timeout", config->timeout);
+    cJSON_AddNumberToObject(root, "bufferSize", config->buffer_size);
 
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -106,81 +221,57 @@ static char* serial_config_to_json(void) {
 
 // Initialize serial configuration
 void serial_init(void) {
+    // Initialize first port
     char config_str[1024] = {0};
-    int read_len = db_read("serial_config", config_str, sizeof(config_str));
-    if (read_len <= 0) {
-        DBG_ERROR("Failed to read serial config from database");
-        return;
+    int read_len = db_read("serial1_config", config_str, sizeof(config_str));
+    if (read_len > 0) {
+        if (parse_serial_config(config_str, &g_serial_configs[0])) {
+            DBG_INFO("Serial port 1 configuration initialized: port=%s, baud=%d", 
+                     g_serial_configs[0].port, g_serial_configs[0].baud_rate);
+        }
+        else {
+            DBG_ERROR("Failed to parse serial port 1 configuration");
+        }
     }
 
-    if (!parse_serial_config(config_str)) {
-        DBG_ERROR("Failed to parse serial config");
-        return;
+    // Initialize second port
+    read_len = db_read("serial2_config", config_str, sizeof(config_str));
+    if (read_len > 0) {
+        if (parse_serial_config(config_str, &g_serial_configs[1])) {
+            DBG_INFO("Serial port 2 configuration initialized: port=%s, baud=%d", 
+                     g_serial_configs[1].port, g_serial_configs[1].baud_rate);
+        }
+        else {
+            DBG_ERROR("Failed to parse serial port 2 configuration");
+        }
     }
-
-    DBG_INFO("Serial configuration initialized: port=%s, baud=%d", 
-             g_serial_config.port, g_serial_config.baud_rate);
 }
 
-// Get serial configuration
-serial_config_t* serial_get_config(void) {
-    return &g_serial_config;
-}
-
-// Update serial configuration
-bool serial_update_config(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    if (!parse_serial_config(json_str)) {
-        return false;
-    }
-
-    char *config_json = serial_config_to_json();
-    if (!config_json) {
-        return false;
-    }
-
-    bool success = (db_write("serial_config", config_json, strlen(config_json) + 1) == 0);
-    free(config_json);
-
-    if (success) {
-        DBG_INFO("Serial configuration updated successfully");
-    } else {
-        DBG_ERROR("Failed to save serial configuration");
-    }
-
-    return success;
-}
-
-// Save serial configuration from JSON
-bool serial_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    int result = db_write("serial_config", json_str, strlen(json_str) + 1);
-    if (result != 0) {
-        DBG_ERROR("Failed to write serial config to database");
-        return false;
-    }
-
-    return true;
+// Get serial configuration for a specific port
+serial_config_t* serial_get_config(int port_index) {
+    return get_serial_config(port_index);
 }
 
 // Open serial port
-int serial_open(const char *port, int baud, int data_bits, int stop_bits, 
-                int parity, int flow_control) {
+int serial_open(int port_index) {
+    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
+        DBG_ERROR("Invalid port index");
+        return -1;
+    }
+
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (config->is_open) {
+        DBG_WARN("Port %s is already open", config->port);
+        return port_index;
+    }
+
     struct termios tty;
     int fd;
 
     // Open serial port
-    fd = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    fd = open(config->port, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0) {
-        DBG_ERROR("Failed to open serial port %s", port);
+        DBG_ERROR("Failed to open serial port %s", config->port);
         return -1;
     }
 
@@ -193,14 +284,14 @@ int serial_open(const char *port, int baud, int data_bits, int stop_bits,
 
     // Set baud rate
     speed_t speed;
-    switch (baud) {
+    switch (config->baud_rate) {
         case 9600:   speed = B9600;   break;
         case 19200:  speed = B19200;  break;
         case 38400:  speed = B38400;  break;
         case 57600:  speed = B57600;  break;
         case 115200: speed = B115200; break;
         default:
-            DBG_ERROR("Unsupported baud rate: %d", baud);
+            DBG_ERROR("Unsupported baud rate: %d", config->baud_rate);
             close(fd);
             return -1;
     }
@@ -209,26 +300,26 @@ int serial_open(const char *port, int baud, int data_bits, int stop_bits,
 
     // Set data bits
     tty.c_cflag &= ~CSIZE;   // Clear size bits
-    switch (data_bits) {
+    switch (config->data_bits) {
         case 5: tty.c_cflag |= CS5; break;
         case 6: tty.c_cflag |= CS6; break;
         case 7: tty.c_cflag |= CS7; break;
         case 8: tty.c_cflag |= CS8; break;
         default:
-            DBG_ERROR("Unsupported data bits: %d", data_bits);
+            DBG_ERROR("Unsupported data bits: %d", config->data_bits);
             close(fd);
             return -1;
     }
 
     // Set stop bits
-    if (stop_bits == 2) {
+    if (config->stop_bits == 2) {
         tty.c_cflag |= CSTOPB;  // 2 stop bits
     } else {
         tty.c_cflag &= ~CSTOPB; // 1 stop bit
     }
 
     // Set parity
-    switch (parity) {
+    switch (config->parity) {
         case 0: // None
             tty.c_cflag &= ~PARENB;
             tty.c_cflag &= ~PARODD;
@@ -242,13 +333,13 @@ int serial_open(const char *port, int baud, int data_bits, int stop_bits,
             tty.c_cflag &= ~PARODD;
             break;
         default:
-            DBG_ERROR("Unsupported parity: %d", parity);
+            DBG_ERROR("Unsupported parity: %d", config->parity);
             close(fd);
             return -1;
     }
 
     // Set flow control
-    switch (flow_control) {
+    switch (config->flow_control) {
         case 0: // None
             tty.c_cflag &= ~CRTSCTS;
             tty.c_iflag &= ~(IXON | IXOFF | IXANY);
@@ -258,11 +349,11 @@ int serial_open(const char *port, int baud, int data_bits, int stop_bits,
             tty.c_iflag &= ~(IXON | IXOFF | IXANY);
             break;
         case 2: // Software (XON/XOFF)
-            tty.c_cflag &= ~CRTSCTS;
+    tty.c_cflag &= ~CRTSCTS;
             tty.c_iflag |= (IXON | IXOFF | IXANY);
             break;
         default:
-            DBG_ERROR("Unsupported flow control: %d", flow_control);
+            DBG_ERROR("Unsupported flow control: %d", config->flow_control);
             close(fd);
             return -1;
     }
@@ -286,123 +377,224 @@ int serial_open(const char *port, int baud, int data_bits, int stop_bits,
         return -1;
     }
 
+    // Store port information
+    config->fd = fd;
+    config->is_open = true;
+
+    // Allocate write buffer
+    if (!allocate_write_buffer(config)) {
+        DBG_ERROR("Failed to allocate write buffer for port %s", config->port);
+        close(fd);
+        config->is_open = false;
+        config->fd = -1;
+        return -1;
+    }
+
     DBG_INFO("Serial port %s opened with settings: baud=%d, data=%d, stop=%d, parity=%d, flow=%d", 
-             port, baud, data_bits, stop_bits, parity, flow_control);
-    return fd;
-}
-
-// Receive data from serial port
-int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout){
-    int len = 0;
-    int rc = 0;
-    fd_set rset;
-    struct timeval tv;
-
-    while (bufsz > 0) {
-        FD_ZERO(&rset);
-        FD_SET(fd, &rset);
-
-        tv.tv_sec = timeout / 1000;
-        tv.tv_usec = (timeout % 1000) * 1000;
-        rc = select(fd + 1, &rset, NULL, NULL, &tv);
-        if (rc == -1) {
-            if (errno == EINTR)
-                continue;
-        }
-
-        if (rc <= 0) {
-            break;
-        }
-
-        rc = read(fd, buf + len, bufsz);
-        if (rc <= 0) {
-            break;
-        }
-        len += rc;
-        bufsz -= rc;
-
-        timeout = 20;
-    }
-
-    if (rc >= 0) {
-        rc = len;
-    }
-
-    return rc;
+             config->port, config->baud_rate, config->data_bits, config->stop_bits, config->parity, config->flow_control);
+    return port_index;
 }
 
 // Read data from serial port
-int serial_read(int fd, uint8_t *buf, int len, int timeout_ms) {
-    if (fd < 0) {
-        DBG_ERROR("Invalid file descriptor");
+int serial_read(int port_index, uint8_t *buf, int len, int timeout_ms, int byte_timeout_ms) {
+    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
+        DBG_ERROR("Invalid port index");
+        return -1;
+    }
+
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (!config->is_open || config->fd < 0) {
+        DBG_ERROR("Port is not open");
         return -1;
     }
 
     fd_set rdset;
-    struct timeval timeout;
+    struct timeval tv;
     int ret;
+    int total_read = 0;
+    int remaining = len;
 
+    while (remaining > 0) {
     FD_ZERO(&rdset);
-    FD_SET(fd, &rdset);
+        FD_SET(config->fd, &rdset);
 
-    timeout.tv_sec = timeout_ms / 1000;
-    timeout.tv_usec = (timeout_ms % 1000) * 1000;
-
-    ret = select(fd + 1, &rdset, NULL, NULL, &timeout);
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        ret = select(config->fd + 1, &rdset, NULL, NULL, &tv);
     if (ret < 0) {
         DBG_ERROR("Select error");
         return -1;
     }
     if (ret == 0) {
-        DBG_WARN("Read timeout");
+            if (total_read > 0) {
+                // If we've read some data and hit byte timeout, return what we have
+                DBG_DEBUG("Byte timeout after reading %d bytes", total_read);
+                return total_read;
+            }
+            DBG_WARN("No data available within timeout");
         return 0;
     }
 
-    ret = read(fd, buf, len);
+        ret = read(config->fd, buf + total_read, remaining);
     if (ret < 0) {
         DBG_ERROR("Read error");
         return -1;
+        }
+        if (ret == 0) {
+            // Connection closed
+            return total_read;
+        }
+
+        total_read += ret;
+        remaining -= ret;
+
+        // Use byte timeout for subsequent reads
+        timeout_ms = byte_timeout_ms;
     }
 
-    return ret;
+    return total_read;
 }
 
 // Write data to serial port
-int serial_write(int fd, const uint8_t *buf, int len) {
-    if (fd < 0) {
-        DBG_ERROR("Invalid file descriptor");
+int serial_write(int port_index, const uint8_t *buf, int len) {
+    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
+        DBG_ERROR("Invalid port index");
         return -1;
     }
 
-    int ret = write(fd, buf, len);
-    if (ret < 0) {
-        DBG_ERROR("Write error");
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (!config->is_open || config->fd < 0) {
+        DBG_ERROR("Port is not open");
+        return -1;
+    }
+
+    if (!buf || len <= 0) {
+        DBG_ERROR("Invalid parameters");
+        return -1;
+    }
+
+    if (!config->write_buffer) {
+        DBG_ERROR("Write buffer not allocated");
         return -1;
     }
     
-    // Wait for all data to be transmitted
-    tcdrain(fd);
+    int total_written = 0;
+    int remaining = len;
+    const uint8_t *current = buf;
 
+    while (remaining > 0) {
+        // Calculate available space in buffer
+        int available = config->buffer_size - config->write_buffer_pos;
+        int to_copy = (remaining < available) ? remaining : available;
+
+        // Copy data to write buffer
+        memcpy(config->write_buffer + config->write_buffer_pos, current, to_copy);
+        config->write_buffer_pos += to_copy;
+        current += to_copy;
+        remaining -= to_copy;
+        total_written += to_copy;
+
+        // Check if buffer should be flushed
+        if (should_flush_buffer(config)) {
+            int ret = flush_write_buffer(config);
+            if (ret < 0) {
+                DBG_ERROR("Failed to flush write buffer");
     return ret;
+            }
+        }
+    }
+
+    return total_written;
 }
 
 // Flush serial port buffers
-void serial_flush(int fd) {
-    if (fd < 0) {
-        DBG_ERROR("Invalid file descriptor");
+void serial_flush(int port_index) {
+    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
+        DBG_ERROR("Invalid port index");
         return;
     }
 
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (!config->is_open || config->fd < 0) {
+        DBG_ERROR("Port is not open");
+        return;
+    }
+    
+    // Flush write buffer if there's data
+    if (config->write_buffer && config->write_buffer_pos > 0) {
+        flush_write_buffer(config);
+    }
+
     // Flush both input and output buffers
-    if (tcflush(fd, TCIOFLUSH) < 0) {
+    if (tcflush(config->fd, TCIOFLUSH) < 0) {
         DBG_ERROR("Failed to flush serial buffers");
     }
 }
 
-// Close serial port
-void serial_close(int fd) {
-    if (fd >= 0) {
-        close(fd);
-        DBG_INFO("Serial port closed");
+// Flush serial receive buffer only
+void serial_flush_rx(int port_index) {
+    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
+        DBG_ERROR("Invalid port index");
+        return;
+    }
+
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (!config->is_open || config->fd < 0) {
+        DBG_ERROR("Port is not open");
+        return;
+    }
+
+    // Flush only input buffer
+    if (tcflush(config->fd, TCIFLUSH) < 0) {
+        DBG_ERROR("Failed to flush receive buffer");
     }
 }
+
+// Close serial port
+void serial_close(int port_index) {
+    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
+        DBG_ERROR("Invalid port index");
+        return;
+    }
+
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (!config->is_open || config->fd < 0) {
+        DBG_ERROR("Port is not open");
+        return;
+    }
+
+    // Flush any remaining data
+    if (config->write_buffer && config->write_buffer_pos > 0) {
+        flush_write_buffer(config);
+    }
+    
+    // Free write buffer
+    free_write_buffer(config);
+    
+    close(config->fd);
+    config->fd = -1;
+    config->is_open = false;
+    DBG_INFO("Serial port %s closed", config->port);
+}
+
+// Close all serial ports
+void serial_close_all(void) {
+    for (int i = 0; i < MAX_SERIAL_PORTS; i++) {
+        if (g_serial_configs[i].is_open) {
+            // Flush any remaining data
+            if (g_serial_configs[i].write_buffer && g_serial_configs[i].write_buffer_pos > 0) {
+                flush_write_buffer(&g_serial_configs[i]);
+            }
+            
+            // Free write buffer
+            free_write_buffer(&g_serial_configs[i]);
+            
+            close(g_serial_configs[i].fd);
+            g_serial_configs[i].fd = -1;
+            g_serial_configs[i].is_open = false;
+            DBG_INFO("Serial port %s closed", g_serial_configs[i].port);
+        }
+    }
+}
+
+

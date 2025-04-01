@@ -123,22 +123,6 @@ mqtt_config_t* mqtt_get_config(void) {
     return &g_mqtt_config;
 }
 
-// Save MQTT configuration from JSON
-bool mqtt_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    int result = db_write("mqtt_config", json_str, strlen(json_str) + 1);
-    if (result != 0) {
-        DBG_ERROR("Failed to write MQTT config to database");
-        return false;
-    }
-
-    return true;
-}
-
 // Check if MQTT is enabled
 bool mqtt_is_enabled(void) {
     return g_mqtt_config.enabled;
@@ -255,40 +239,11 @@ static bool parse_sub_topic(cJSON *topic_obj, mqtt_sub_topic_t *topic) {
     return true;
 }
 
-bool pub_topic_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    int result = db_write("publish_topics", json_str, strlen(json_str) + 1);
-    if (result != 0) {
-        DBG_ERROR("Failed to write publish topics to database");
-        return false;
-    }
-    return true;
-}
-
-bool sub_topic_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    int result = db_write("subscribe_topics", json_str, strlen(json_str) + 1);
-    if (result != 0) {
-        DBG_ERROR("Failed to write subscribe topics to database");
-        return false;
-    }
-    return true;
-}
-
 // Initialize MQTT topics
 void mqtt_topics_init(void) {
     // Initialize publish topics
     char json_str[4096] = {0};
     int read_len = db_read("publish_topics", json_str, sizeof(json_str));
-    json_str[read_len] = '\0';
     if (read_len > 0) {
         cJSON *root = cJSON_Parse(json_str);
         if (root && root->type == cJSON_Array) {
@@ -305,7 +260,6 @@ void mqtt_topics_init(void) {
 
     // Initialize subscribe topics
     read_len = db_read("subscribe_topics", json_str, sizeof(json_str));
-    json_str[read_len] = '\0';
     if (read_len > 0) {
         cJSON *root = cJSON_Parse(json_str);
         if (root && root->type == cJSON_Array) {

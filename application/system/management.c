@@ -11,13 +11,6 @@
 // Global instance of system management config
 static struct system_management_config g_system_config = {0};
 
-// Initialize system management configuration
-void management_init(void) {
-    DBG_INFO("Initializing system management configuration");
-    // Load saved configuration from database if exists
-    management_load_config();
-}
-
 // Get current system management configuration
 const struct system_management_config* management_get_config(void) {
     return &g_system_config;
@@ -36,7 +29,7 @@ int management_get_log_method(void) {
 }
 
 // Update system management configuration from JSON
-bool management_update_config(const char *json_str) {
+static bool parse_management_config(const char *json_str) {
     if (!json_str) {
         DBG_ERROR("Invalid JSON string");
         return false;
@@ -118,85 +111,25 @@ bool management_update_config(const char *json_str) {
     return true;
 }
 
-// Convert system management configuration to JSON string
-char* management_config_to_json(void) {
-    cJSON *root = cJSON_CreateObject();
-    if (!root) {
-        DBG_ERROR("Failed to create JSON object");
-        return NULL;
-    }
-
-    cJSON_AddStringToObject(root, "username", g_system_config.username);
-    cJSON_AddStringToObject(root, "password", g_system_config.password);
-    cJSON_AddStringToObject(root, "server1", g_system_config.ntp_server1);
-    cJSON_AddStringToObject(root, "server2", g_system_config.ntp_server2);
-    cJSON_AddStringToObject(root, "server3", g_system_config.ntp_server3);
-    cJSON_AddNumberToObject(root, "timezone", g_system_config.timezone);
-    cJSON_AddBoolToObject(root, "enabled", g_system_config.ntp_enabled);
-    cJSON_AddNumberToObject(root, "hport", g_system_config.http_port);
-    cJSON_AddNumberToObject(root, "wport", g_system_config.websocket_port);
-    cJSON_AddNumberToObject(root, "logMethod", g_system_config.log_method);
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        DBG_ERROR("Failed to convert config to JSON string");
-        return NULL;
-    }
-
-    return json_str;
-}
-
-// Save system management configuration to database
-bool management_save_config(void) {
-    char *json_str = management_config_to_json();
-    if (!json_str) {
-        return false;
-    }
-
-    int result = db_write("system_management_config", json_str, strlen(json_str) + 1);
-    free(json_str);
-
-    if (result != 0) {
-        DBG_ERROR("Failed to save system management config to database");
-        return false;
-    }
-
-    DBG_INFO("System management config saved successfully");
-    return true;
-}
-
-bool management_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    bool success = (db_write("system_management_config", json_str, strlen(json_str) + 1) == 0);
-    return success;
-}
-
-// Load system management configuration from database
-bool management_load_config(void) {
+// Initialize system management configuration
+void management_init(void) {
     char config_str[4096] = {0};
 
     // Read config from database
     int read_len = db_read("system_config", config_str, sizeof(config_str));
     if (read_len <= 0) {
         DBG_ERROR("Failed to read system management config from database");
-        return false;
+        return;
     }
 
     // Update configuration from JSON
-    bool success = management_update_config(config_str);
+    bool success = parse_management_config(config_str);
 
     if (!success) {
         DBG_ERROR("Failed to update system management config from JSON");
-        return false;
+        return;
     }
 
-    DBG_INFO("System management config loaded successfully");
-    return true;
+    DBG_INFO("System management config initialized successfully");
 }
 

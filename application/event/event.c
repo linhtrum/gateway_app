@@ -98,114 +98,6 @@ static bool parse_event_config(const char *json_str) {
     return true;
 }
 
-// Save event configuration to database
-static bool save_event_config(void) {
-    cJSON *root = cJSON_CreateArray();
-    if (!root) {
-        DBG_ERROR("Failed to create JSON array");
-        return false;
-    }
-
-    for (int i = 0; i < g_event_data.count; i++) {
-        event_data_t *evt = &g_event_data.events[i];
-        cJSON *event = cJSON_CreateObject();
-        if (!event) {
-            DBG_ERROR("Failed to create event JSON object");
-            cJSON_Delete(root);
-            return false;
-        }
-
-        // Add event fields
-        cJSON_AddStringToObject(event, "n", evt->name);
-        cJSON_AddBoolToObject(event, "e", evt->enabled);
-        cJSON_AddNumberToObject(event, "c", evt->condition);
-        cJSON_AddStringToObject(event, "p", evt->point);
-        cJSON_AddNumberToObject(event, "sc", evt->scan_cycle);
-        cJSON_AddNumberToObject(event, "mi", evt->min_interval);
-        cJSON_AddNumberToObject(event, "ut", evt->upper_threshold);
-        cJSON_AddNumberToObject(event, "lt", evt->lower_threshold);
-        cJSON_AddNumberToObject(event, "te", evt->trigger_exec);
-        cJSON_AddNumberToObject(event, "ta", evt->trigger_action);
-        cJSON_AddStringToObject(event, "d", evt->description);
-        cJSON_AddNumberToObject(event, "id", evt->id);
-
-        cJSON_AddItemToArray(root, event);
-    }
-
-    // Convert to string and save to database
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        DBG_ERROR("Failed to convert event config to JSON string");
-        return false;
-    }
-
-    int result = db_write("event_config", json_str, strlen(json_str) + 1);
-    free(json_str);
-
-    if (result != 0) {
-        DBG_ERROR("Failed to save event config to database");
-        return false;
-    }
-
-    DBG_INFO("Event configuration saved successfully");
-    return true;
-}
-
-bool event_save_config_from_json(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-
-    bool success = (db_write("event_config", json_str, strlen(json_str) + 1) == 0);
-    return success;
-}
-
-char *event_config_to_json(void) {
-    cJSON *root = cJSON_CreateArray();
-    if (!root) {
-        DBG_ERROR("Failed to create JSON array");
-        return NULL;
-    }
-
-    for (int i = 0; i < g_event_data.count; i++) {
-        event_data_t *evt = &g_event_data.events[i];
-        cJSON *event = cJSON_CreateObject();
-        if (!event) {
-            DBG_ERROR("Failed to create event JSON object");
-            cJSON_Delete(root);
-            return NULL;
-        }
-
-        cJSON_AddStringToObject(event, "n", evt->name);
-        cJSON_AddBoolToObject(event, "e", evt->enabled);
-        cJSON_AddNumberToObject(event, "c", evt->condition);
-        cJSON_AddStringToObject(event, "p", evt->point);
-        cJSON_AddNumberToObject(event, "sc", evt->scan_cycle);
-        cJSON_AddNumberToObject(event, "mi", evt->min_interval);
-        cJSON_AddNumberToObject(event, "ut", evt->upper_threshold);
-        cJSON_AddNumberToObject(event, "lt", evt->lower_threshold);
-        cJSON_AddNumberToObject(event, "te", evt->trigger_exec);
-        cJSON_AddNumberToObject(event, "ta", evt->trigger_action);
-        cJSON_AddStringToObject(event, "d", evt->description);
-        cJSON_AddNumberToObject(event, "id", evt->id);
-
-        cJSON_AddItemToArray(root, event);
-    }
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (!json_str) {
-        DBG_ERROR("Failed to convert event config to JSON string");
-        return NULL;
-    }
-
-    return json_str;
-}
-
 // Load event configuration from database
 static bool event_load_config(void) {
     char config_str[4*4096] = {0};
@@ -247,20 +139,6 @@ event_config_t* event_get_config(void) {
 // Get number of events
 int event_get_count(void) {
     return g_event_data.count;
-}
-
-// Update event configuration
-bool event_update_config(const char *json_str) {
-    if (!json_str) {
-        DBG_ERROR("Invalid JSON string");
-        return false;
-    }
-    
-    if (!parse_event_config(json_str)) {
-        return false;
-    }
-
-    return save_event_config();
 }
 
 // Deinitialize event configuration
