@@ -71,7 +71,7 @@ static bool allocate_write_buffer(serial_config_t *config) {
         return false;
     }
 
-    config->write_buffer = (uint8_t *)malloc(config->buffer_size);
+    config->write_buffer = (uint8_t *)calloc(config->buffer_size, sizeof(uint8_t));
     if (!config->write_buffer) {
         DBG_ERROR("Failed to allocate write buffer");
         return false;

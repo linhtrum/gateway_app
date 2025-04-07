@@ -49,20 +49,22 @@ typedef union {
 
 // Structure for a single node
 typedef struct node {
-    char *name;
-    uint16_t address;
-    uint8_t function;
-    data_type_t data_type;
-    uint32_t timeout;  // Timeout in milliseconds for serial read
-    node_value_t value;  // Store the converted value
-    struct node *next;
-    uint16_t offset;  // Offset in the merged data array
-    bool is_ok;
-    bool enable_reporting;     // Enable reporting on change
-    uint16_t variation_range; // Variation range for reporting
-    bool enable_mapping;      // Enable address mapping
-    uint16_t mapped_address;  // Mapped node address
-    char *formula;           // Calculation formula
+    char *name;                          // Node name
+    uint16_t address;                    // Modbus address
+    uint8_t function;                    // Modbus function code
+    data_type_t data_type;               // Data type (boolean, int8, uint8, int16, uint16, int32, uint32, float, double)
+    uint32_t timeout;                    // Timeout in milliseconds for serial read
+    node_value_t value;                  // Store the converted value (present value)
+    node_value_t previous_value;         // Store the previous value for reporting comparison
+    struct node *next;                   // Pointer to the next node in the linked list
+    uint16_t offset;                     // Offset in the merged data array
+    bool is_ok;                         // Node status (true = valid, false = invalid)
+    bool enable_reporting;              // Enable reporting on change
+    uint16_t variation_range;           // Variation range for reporting
+    bool enable_mapping;                // Enable address mapping
+    uint16_t mapped_address;            // Mapped node address
+    char *formula;                      // Calculation formula
+    uint8_t read_status;                // Read status (0 = success, 1 = timeout, 2 = error)
 } node_t;
 
 // Structure for merged nodes with same function code
@@ -77,14 +79,14 @@ typedef struct node_group {
 
 // Device structure to store device configuration with linked list of nodes
 typedef struct device {
-    char *name;
-    uint8_t device_addr;
-    uint32_t polling_interval;  // Polling interval in milliseconds
-    bool group_mode;           // True for group polling, false for basic polling
-    uint8_t port;              // Serial port number (1-4)
-    protocol_t protocol;       // Protocol type (RTU/TCP)
-    char *server_address;      // Server address for TCP
-    uint16_t server_port;      // Server port for TCP (1-65535)
+    char *name;                   // Device name
+    uint8_t device_addr;          // Device address
+    uint32_t polling_interval;    // Polling interval in milliseconds
+    bool group_mode;              // True for group polling, false for basic polling
+    uint8_t port;                  // Serial port number (1-4)
+    protocol_t protocol;          // Protocol type (RTU/TCP)
+    char *server_address;         // Server address for TCP
+    uint16_t server_port;      // Server port for TCP (255-65535)
     bool enable_mapping;       // Enable address mapping
     uint8_t mapped_slave_addr; // Mapped slave address (1-247)
     node_t *nodes;             // Original list of nodes

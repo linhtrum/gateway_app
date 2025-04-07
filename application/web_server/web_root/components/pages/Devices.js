@@ -1,6 +1,6 @@
 "use strict";
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
-import { Icons, Button, Tabs } from "../Components.js";
+import { Icons, Button, Tabs, Input, Select, Checkbox } from "../Components.js";
 
 // Constants and configuration
 const CONFIG = {
@@ -33,7 +33,8 @@ const CONFIG = {
   ],
   REPORT_CHANNELS: [
     [1, "MQTT"],
-    [2, "Socket"],
+    [2, "Socket1"],
+    [3, "Socket2"],
   ],
   MQTT_QOS_OPTIONS: [
     [0, "QOS0"],
@@ -53,11 +54,11 @@ const CONFIG = {
   ],
   MAX_JSON_TEMPLATE_BYTES: 2048,
   PORT_OPTIONS: [
-    [1, "SERIAL1"],
-    [2, "SERIAL2"],
-    [3, "ETHERNET"],
-    [4, "IO"],
-    [5, "VIRTUAL"],
+    [0, "SERIAL1"],
+    [1, "SERIAL2"],
+    [2, "ETHERNET"],
+    [3, "IO"],
+    [4, "VIRTUAL"],
   ],
   PROTOCOL_TYPES: [
     [0, "Modbus"],
@@ -134,37 +135,37 @@ function Devices() {
     da: 1,
     pi: 1000,
     g: false,
-    port: 1,
-    protocol: 0,
-    enableMap: false,
-    mapDa: 1,
-    serverAddress: "",
-    serverPort: 502,
+    p: 0,
+    pr: 0,
+    em: false,
+    ma: 1,
+    sa: "",
+    sp: 502,
   });
   const [newNode, setNewNode] = useState({
     n: "",
     a: 1,
-    f: 1,
+    fc: 1,
     dt: 1,
     t: 1000,
-    reportOnChange: false,
-    variationRange: 1,
-    enableNodeMap: false,
-    mapNodeAddress: 0,
-    formula: "",
+    er: false,
+    vr: 1,
+    em: false,
+    ma: 1,
+    fo: "",
   });
   const [newEvent, setNewEvent] = useState({
-    n: "",
-    e: true,
-    c: 1,
-    p: "",
-    sc: 100,
-    mi: 1000,
-    ut: 20000,
-    lt: 0,
-    te: 1,
-    ta: 1,
-    d: "",
+    n: "", // Event name
+    e: true, // Enable
+    c: 1, // Trigger condition
+    p: "", // Trigger point
+    sc: 100, // Scan code
+    mi: 1000, // Minimum interval
+    ut: 20000, // Upper threshold
+    lt: 0, // Lower threshold
+    te: 1, // Trigger execution
+    ta: 1, // Trigger action
+    d: "", // Description
   });
 
   // Edit states
@@ -643,15 +644,145 @@ function Devices() {
     return errors;
   };
 
-  // Form handlers
+  // AddDeviceModal Form handlers
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let error = null;
+
+    // Handle checkbox inputs
+    if (type === "checkbox") {
+      setNewDevice((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    // Handle numeric inputs
+    if (["da", "pi", "p", " pr", "ma", "sp"].includes(name)) {
+      const numValue = parseInt(value);
+      if (value !== "") {
+        if (
+          name === "da" &&
+          (isNaN(numValue) || numValue < 1 || numValue > 255)
+        ) {
+          error = "Slave address must be between 1 and 255";
+        } else if (
+          name === "pi" &&
+          (isNaN(numValue) ||
+            numValue < CONFIG.MIN_POLLING_INTERVAL ||
+            numValue > CONFIG.MAX_POLLING_INTERVAL)
+        ) {
+          error = `Polling interval must be between ${CONFIG.MIN_POLLING_INTERVAL} and ${CONFIG.MAX_POLLING_INTERVAL} ms`;
+        } else if (
+          name === "ma" &&
+          (isNaN(numValue) || numValue < 0 || numValue > 255)
+        ) {
+          error = "Map device address must be between 0 and 255";
+        } else if (
+          name === "sp" &&
+          (isNaN(numValue) || numValue < 255 || numValue > 65535)
+        ) {
+          error = "Server port must be between 255 and 65535";
+        }
+      }
+      setNewDevice((prev) => ({
+        ...prev,
+        [name]: value === "" ? "" : numValue,
+      }));
+      return;
+    }
+
+    if (name === "n") {
+      if (!value || value.trim().length === 0) {
+        error = "Device name cannot be empty";
+      } else if (value.length > CONFIG.MAX_NAME_LENGTH) {
+        error = `Device name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`;
+      }
+    }
+
+    if (error) {
+      alert(error);
+      return;
+    }
+
     setNewDevice((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     }));
   };
 
+  // EditDeviceModal Form handlers
+  const handleEditInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    let error = null;
+
+    // Handle checkbox inputs
+    if (type === "checkbox") {
+      setEditingDevice((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    // Handle numeric inputs
+    if (["da", "pi", "p", " pr", "ma", "sp"].includes(name)) {
+      const numValue = parseInt(value);
+      if (value !== "") {
+        if (
+          name === "da" &&
+          (isNaN(numValue) || numValue < 1 || numValue > 255)
+        ) {
+          error = "Slave address must be between 1 and 255";
+        } else if (
+          name === "pi" &&
+          (isNaN(numValue) ||
+            numValue < CONFIG.MIN_POLLING_INTERVAL ||
+            numValue > CONFIG.MAX_POLLING_INTERVAL)
+        ) {
+          error = `Polling interval must be between ${CONFIG.MIN_POLLING_INTERVAL} and ${CONFIG.MAX_POLLING_INTERVAL} ms`;
+        } else if (
+          name === "ma" &&
+          (isNaN(numValue) || numValue < 0 || numValue > 255)
+        ) {
+          error = "Map device address must be between 0 and 255";
+        } else if (
+          name === "sp" &&
+          (isNaN(numValue) || numValue < 255 || numValue > 65535)
+        ) {
+          error = "Server port must be between 255 and 65535";
+        }
+      }
+      // Update the value as a number
+      setEditingDevice((prev) => ({
+        ...prev,
+        [name]: value === "" ? "" : numValue,
+      }));
+      return;
+    }
+
+    // Validate device name
+    if (name === "n") {
+      if (!value || value.trim().length === 0) {
+        error = "Device name cannot be empty";
+      } else if (value.length > CONFIG.MAX_NAME_LENGTH) {
+        error = `Device name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`;
+      }
+    }
+
+    if (error) {
+      alert(error);
+      return;
+    }
+
+    setEditingDevice((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // AddNodeModal Form handlers
   const handleNodeInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     let error = null;
@@ -666,9 +797,7 @@ function Devices() {
     }
 
     // Handle numeric fields
-    if (
-      ["a", "f", "dt", "t", "variationRange", "mapNodeAddress"].includes(name)
-    ) {
+    if (["a", "fc", "dt", "t", "vr", "ma"].includes(name)) {
       const numValue = parseInt(value);
       if (value !== "") {
         if (
@@ -679,15 +808,15 @@ function Devices() {
         ) {
           error = `Timeout must be between ${CONFIG.MIN_TIMEOUT} and ${CONFIG.MAX_TIMEOUT} ms`;
         } else if (
-          name === "variationRange" &&
+          name === "vr" &&
           (isNaN(numValue) || numValue < 1 || numValue > 65535)
         ) {
           error = "Variation range must be between 1 and 65535";
         } else if (
-          name === "mapNodeAddress" &&
-          (isNaN(numValue) || numValue < 0 || numValue > 65534)
+          name === "ma" &&
+          (isNaN(numValue) || numValue < 0 || numValue > 65535)
         ) {
-          error = "Map node address must be between 0 and 65534";
+          error = "Map node address must be between 0 and 65535";
         }
       }
       setNewNode((prev) => ({
@@ -698,7 +827,7 @@ function Devices() {
     }
 
     // Handle formula field
-    if (name === "formula") {
+    if (name === "fo") {
       if (value.length > 128) {
         error = "Formula cannot exceed 128 characters";
       }
@@ -729,6 +858,91 @@ function Devices() {
     }));
   };
 
+  // EditNodeModal Form handlers
+  const handleEditNodeInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+
+    // Handle checkbox inputs
+    if (type === "checkbox") {
+      setEditingNode((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    // Handle numeric fields
+    if (["a", "fc", "dt", "t", "vr", "ma"].includes(name)) {
+      const numValue = parseInt(value);
+      if (value !== "") {
+        if (
+          name === "t" &&
+          (isNaN(numValue) ||
+            numValue < CONFIG.MIN_TIMEOUT ||
+            numValue > CONFIG.MAX_TIMEOUT)
+        ) {
+          alert(
+            `Timeout must be between ${CONFIG.MIN_TIMEOUT} and ${CONFIG.MAX_TIMEOUT} ms`
+          );
+          return;
+        } else if (
+          name === "vr" &&
+          (isNaN(numValue) || numValue < 1 || numValue > 65535)
+        ) {
+          alert("Variation range must be between 1 and 65535");
+          return;
+        } else if (
+          name === "ma" &&
+          (isNaN(numValue) || numValue < 0 || numValue > 65534)
+        ) {
+          alert("Map node address must be between 0 and 65534");
+          return;
+        }
+      }
+      setEditingNode((prev) => ({
+        ...prev,
+        [name]: value === "" ? "" : numValue,
+      }));
+      return;
+    }
+
+    // Handle formula field
+    if (name === "fo") {
+      if (value.length > 128) {
+        alert("Formula cannot exceed 128 characters");
+        return;
+      }
+      setEditingNode((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+      return;
+    }
+
+    // Handle other fields
+    if (name === "n") {
+      if (value.length > CONFIG.MAX_NAME_LENGTH) {
+        alert(`Node name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`);
+        return;
+      }
+      if (
+        value &&
+        !isNodeNameUniqueAcrossDevices(value, selectedDevice, editingNodeIndex)
+      ) {
+        alert(
+          "A node with this name already exists in any device. Please use a unique name."
+        );
+        return;
+      }
+    }
+
+    setEditingNode((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // AddDeviceModal Submit handlers
   const handleSubmit = (e) => {
     e.preventDefault();
     const errors = validateDeviceConfig(newDevice);
@@ -741,20 +955,21 @@ function Devices() {
     // Add the new device
     setDevices((prev) => [...prev, { ...newDevice, ns: [] }]);
     setNewDevice({
-      n: "",
-      da: 1,
-      pi: 1000,
-      g: false,
-      port: 1,
-      protocol: 0,
-      enableMap: false,
-      mapDa: 1,
-      serverAddress: "",
-      serverPort: 502,
+      n: "", //device name
+      p: 0, //device port
+      pr: 0, //device protocol
+      da: 1, //device address
+      pi: 1000, //polling interval
+      g: false, //device group
+      sa: "", //server address
+      sp: 502, //server port
+      em: false, //enable map
+      ma: 1, //map device address
     });
     setIsAddingDevice(false);
   };
 
+  // AddNodeModal Submit handlers
   const handleNodeSubmit = (e) => {
     e.preventDefault();
     if (selectedDevice === null) return;
@@ -776,8 +991,10 @@ function Devices() {
               ...newNode,
               dt: parseInt(newNode.dt), // Ensure dt is numeric
               a: parseInt(newNode.a),
-              f: parseInt(newNode.f),
+              fc: parseInt(newNode.fc),
               t: parseInt(newNode.t),
+              vr: parseInt(newNode.vr),
+              ma: parseInt(newNode.ma),
             },
           ],
         };
@@ -789,14 +1006,14 @@ function Devices() {
     setNewNode({
       n: "",
       a: 1,
-      f: 1,
+      fc: 1,
       dt: 1, // Reset to default numeric value
       t: 1000,
-      reportOnChange: false,
-      variationRange: 1,
-      enableNodeMap: false,
-      mapNodeAddress: 0,
-      formula: "",
+      er: false,
+      vr: 1,
+      em: false,
+      ma: 1,
+      fo: "",
     });
     setIsAddingNode(false);
   };
@@ -838,12 +1055,12 @@ function Devices() {
       da: parseInt(devices[index].da),
       pi: parseInt(devices[index].pi),
       g: Boolean(devices[index].g),
-      port: parseInt(devices[index].port),
-      protocol: parseInt(devices[index].protocol),
-      serverAddress: devices[index].serverAddress,
-      serverPort: parseInt(devices[index].serverPort),
-      enableMap: Boolean(devices[index].enableMap),
-      mapDa: parseInt(devices[index].mapDa),
+      p: parseInt(devices[index].p),
+      pr: parseInt(devices[index].pr),
+      sa: devices[index].sa,
+      sp: parseInt(devices[index].sp),
+      em: Boolean(devices[index].em),
+      ma: parseInt(devices[index].ma),
       ns: [...(devices[index].ns || [])],
     };
     setEditingDevice(deviceToEdit);
@@ -874,178 +1091,23 @@ function Devices() {
     const nodeToEdit = {
       n: devices[selectedDevice].ns[nodeIndex].n,
       a: parseInt(devices[selectedDevice].ns[nodeIndex].a),
-      f: parseInt(devices[selectedDevice].ns[nodeIndex].f),
+      fc: parseInt(devices[selectedDevice].ns[nodeIndex].fc),
       dt: parseInt(devices[selectedDevice].ns[nodeIndex].dt),
       t: parseInt(devices[selectedDevice].ns[nodeIndex].t),
-      reportOnChange: Boolean(
-        devices[selectedDevice].ns[nodeIndex].reportOnChange
-      ),
-      variationRange:
-        parseInt(devices[selectedDevice].ns[nodeIndex].variationRange) || 1,
-      enableNodeMap: Boolean(
-        devices[selectedDevice].ns[nodeIndex].enableNodeMap
-      ),
-      mapNodeAddress:
-        parseInt(devices[selectedDevice].ns[nodeIndex].mapNodeAddress) || 0,
-      formula: devices[selectedDevice].ns[nodeIndex].formula || "",
+      er: Boolean(devices[selectedDevice].ns[nodeIndex].er),
+      vr: parseInt(devices[selectedDevice].ns[nodeIndex].vr),
+      fo: devices[selectedDevice].ns[nodeIndex].fo || "",
+      em: Boolean(devices[selectedDevice].ns[nodeIndex].em),
+      ma: parseInt(devices[selectedDevice].ns[nodeIndex].ma),
     };
     setEditingNode(nodeToEdit);
-  };
-
-  const handleEditInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    let error = null;
-
-    // Handle checkbox inputs
-    if (type === "checkbox" || type === "select-one") {
-      setEditingDevice((prev) => ({
-        ...prev,
-        [name]: checked,
-      }));
-      return;
-    }
-
-    // Handle numeric inputs
-    if (["da", "pi", "mapDa"].includes(name)) {
-      const numValue = parseInt(value);
-      if (value !== "") {
-        if (
-          name === "da" &&
-          (isNaN(numValue) || numValue < 1 || numValue > 247)
-        ) {
-          error = "Slave address must be between 1 and 247";
-        } else if (
-          name === "pi" &&
-          (isNaN(numValue) ||
-            numValue < CONFIG.MIN_POLLING_INTERVAL ||
-            numValue > CONFIG.MAX_POLLING_INTERVAL)
-        ) {
-          error = `Polling interval must be between ${CONFIG.MIN_POLLING_INTERVAL} and ${CONFIG.MAX_POLLING_INTERVAL} ms`;
-        } else if (
-          name === "mapDa" &&
-          (isNaN(numValue) || numValue < 1 || numValue > 255)
-        ) {
-          error = "Map slave address must be between 1 and 255";
-        }
-      }
-      // Update the value as a number
-      setEditingDevice((prev) => ({
-        ...prev,
-        [name]: value === "" ? "" : numValue,
-      }));
-      return;
-    }
-
-    // Validate device name
-    if (name === "n") {
-      if (!value || value.trim().length === 0) {
-        error = "Device name cannot be empty";
-      } else if (value.length > CONFIG.MAX_NAME_LENGTH) {
-        error = `Device name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`;
-      }
-    }
-
-    if (error) {
-      alert(error);
-      return;
-    }
-
-    setEditingDevice((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleEditNodeInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-
-    // Handle checkbox inputs
-    if (type === "checkbox") {
-      setEditingNode((prev) => ({
-        ...prev,
-        [name]: checked,
-      }));
-      return;
-    }
-
-    // Handle numeric fields
-    if (
-      ["a", "f", "dt", "t", "variationRange", "mapNodeAddress"].includes(name)
-    ) {
-      const numValue = parseInt(value);
-      if (value !== "") {
-        if (
-          name === "t" &&
-          (isNaN(numValue) ||
-            numValue < CONFIG.MIN_TIMEOUT ||
-            numValue > CONFIG.MAX_TIMEOUT)
-        ) {
-          alert(
-            `Timeout must be between ${CONFIG.MIN_TIMEOUT} and ${CONFIG.MAX_TIMEOUT} ms`
-          );
-          return;
-        } else if (
-          name === "variationRange" &&
-          (isNaN(numValue) || numValue < 1 || numValue > 65535)
-        ) {
-          alert("Variation range must be between 1 and 65535");
-          return;
-        } else if (
-          name === "mapNodeAddress" &&
-          (isNaN(numValue) || numValue < 0 || numValue > 65534)
-        ) {
-          alert("Map node address must be between 0 and 65534");
-          return;
-        }
-      }
-      setEditingNode((prev) => ({
-        ...prev,
-        [name]: value === "" ? "" : numValue,
-      }));
-      return;
-    }
-
-    // Handle formula field
-    if (name === "formula") {
-      if (value.length > 128) {
-        alert("Formula cannot exceed 128 characters");
-        return;
-      }
-      setEditingNode((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
-      return;
-    }
-
-    // Handle other fields
-    if (name === "n") {
-      if (value.length > CONFIG.MAX_NAME_LENGTH) {
-        alert(`Node name cannot exceed ${CONFIG.MAX_NAME_LENGTH} characters`);
-        return;
-      }
-      if (
-        value &&
-        !isNodeNameUniqueAcrossDevices(value, selectedDevice, editingNodeIndex)
-      ) {
-        alert(
-          "A node with this name already exists in any device. Please use a unique name."
-        );
-        return;
-      }
-    }
-
-    setEditingNode((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
   };
 
   const saveNodeEdit = (nodeIndex) => {
     if (
       !editingNode.n ||
       !editingNode.a ||
-      !editingNode.f ||
+      !editingNode.fc ||
       !editingNode.dt ||
       !editingNode.t
     ) {
@@ -1100,11 +1162,11 @@ function Devices() {
   const generateUniqueNodeName = (deviceIndex) => {
     let baseName = "Node";
     let counter = 1;
-    let newName = `${baseName}${counter}`;
+    let newName = `${baseName}${deviceIndex + 1}${counter}`;
 
     while (!isNodeNameUnique(newName, deviceIndex)) {
       counter++;
-      newName = `${baseName}${counter}`;
+      newName = `${baseName}${deviceIndex + 1}${counter}`;
     }
 
     return newName;
@@ -1125,12 +1187,12 @@ function Devices() {
       da: 1,
       pi: 1000,
       g: false,
-      port: 1,
-      protocol: 0,
-      enableMap: false,
-      mapDa: 1,
-      serverAddress: "",
-      serverPort: 502,
+      p: 0,
+      pr: 0,
+      em: false,
+      ma: 1,
+      sa: "",
+      sp: 502,
     });
     setIsAddingDevice(true);
   };
@@ -1151,11 +1213,16 @@ function Devices() {
 
     const uniqueName = generateUniqueNodeName(selectedDevice);
     setNewNode({
-      n: uniqueName,
-      a: 1,
-      f: 1,
-      dt: 1,
-      t: 1000,
+      n: uniqueName, // Node name
+      a: 1, // Address
+      fc: devices[selectedDevice].p === 4 ? 4 : 1, // Function code
+      dt: 1, // Data type
+      t: 1000, // Timeout
+      er: false, // Enable reporting
+      vr: 1, // Variation range
+      em: false, // Enable mapping
+      ma: 1, // Mapped address
+      fo: "", // Formula
     });
     setIsAddingNode(true);
   };
@@ -1164,16 +1231,16 @@ function Devices() {
   const handleCancelAddDevice = () => {
     setIsAddingDevice(false);
     setNewDevice({
-      n: "",
-      da: 1,
-      pi: 1000,
-      g: false,
-      port: 1,
-      protocol: 0,
-      enableMap: false,
-      mapDa: 1,
-      serverAddress: "",
-      serverPort: 502,
+      n: "", // Device name
+      da: 1, // Slave address
+      pi: 1000, // Polling interval
+      g: false, // Group address
+      p: 0, // Port
+      pr: 0, // Protocol
+      em: false, // Enable mapping
+      ma: 1, // Mapped address
+      sa: "", // Server address
+      sp: 502, // Server port
     });
   };
 
@@ -1183,52 +1250,35 @@ function Devices() {
     setNewNode({
       n: "",
       a: 1,
-      f: 1,
+      fc: 1,
       dt: 1,
       t: 1000,
+      er: false,
+      vr: 1,
+      em: false,
+      ma: 1,
+      fo: "",
     });
   };
 
   // Update handleEventInputChange to handle the new key names
   const handleEventInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const keyMap = {
-      name: "n",
-      enabled: "e",
-      triggerCondition: "c",
-      triggerPoint: "p",
-      scanningCycle: "sc",
-      minTriggerInterval: "mi",
-      upperThreshold: "ut",
-      lowerThreshold: "lt",
-      triggerExecution: "te",
-      triggerAction: "ta",
-      description: "d",
-      c: "c",
-      p: "p",
-      sc: "sc",
-      mi: "mi",
-      ut: "ut",
-      lt: "lt",
-      te: "te",
-      ta: "ta",
-      d: "d",
-    };
 
     // Handle checkbox inputs
     if (type === "checkbox") {
       setNewEvent((prev) => ({
         ...prev,
-        [keyMap[name]]: checked,
+        [name]: checked,
       }));
       return;
     }
 
     // Handle numeric fields
-    if (["c", "sc", "mi", "ut", "lt", "te", "ta"].includes(keyMap[name])) {
+    if (["c", "sc", "mi", "ut", "lt", "te", "ta"].includes(name)) {
       setNewEvent((prev) => ({
         ...prev,
-        [keyMap[name]]: parseInt(value) || 0,
+        [name]: parseInt(value) || 0,
       }));
       return;
     }
@@ -1236,7 +1286,7 @@ function Devices() {
     // Handle select and other inputs
     setNewEvent((prev) => ({
       ...prev,
-      [keyMap[name]]: value,
+      [name]: value,
     }));
   };
 
@@ -1341,7 +1391,6 @@ function Devices() {
       ta: event.ta,
       d: event.d,
     });
-    setIsAddingEvent(true);
   };
 
   // Update handleCancelAddEvent to use new key names
@@ -1448,35 +1497,36 @@ function Devices() {
     if (!isOpen) return null;
     const handleSubmit = (e) => {
       e.preventDefault();
-      const errors = validateDeviceConfig(newDevice);
+      // const errors = validateDeviceConfig(newDevice);
 
-      if (errors.length > 0) {
-        alert(errors.join("\n"));
-        return;
-      }
+      // if (errors.length > 0) {
+      //   alert(errors.join("\n"));
+      //   return;
+      // }
       onSubmit(e);
     };
 
     const handleDevicePortChange = (e) => {
       const selectedPort = parseInt(e.target.value);
-      if (selectedPort === 4) {
+      if (selectedPort === 3) {
         setNewDevice((prev) => ({
           ...prev,
           n: "IO",
-          port: selectedPort,
+          p: selectedPort,
+          pr: 0,
+          da: 100,
         }));
-      } else if (selectedPort === 5) {
+      } else if (selectedPort === 4) {
         setNewDevice((prev) => ({
           ...prev,
           n: "VIRTUAL",
-          port: selectedPort,
+          p: selectedPort,
+          pr: 0,
         }));
       } else {
-        const uniqueName = generateUniqueDeviceName();
         setNewDevice((prev) => ({
           ...prev,
-          n: uniqueName,
-          port: selectedPort,
+          p: selectedPort,
         }));
       }
     };
@@ -1485,7 +1535,9 @@ function Devices() {
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
-        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+        <div
+          class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-medium text-gray-900">Add New Device</h3>
             <button
@@ -1496,192 +1548,119 @@ function Devices() {
             </button>
           </div>
           <form onSubmit=${handleSubmit} class="space-y-4">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Device Name
-                </label>
-                <input
-                  type="text"
-                  name="n"
-                  value=${newDevice.n}
-                  onChange=${(e) =>
-                    setNewDevice((prev) => ({ ...prev, n: e.target.value }))}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled=${newDevice.port > 3}
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Slave Address
-                </label>
-                <input
-                  type="number"
-                  name="da"
-                  value=${newDevice.da}
-                  onChange=${(e) =>
-                    setNewDevice((prev) => ({
-                      ...prev,
-                      da: parseInt(e.target.value),
-                    }))}
-                  min="1"
-                  max="247"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Port
-                </label>
-                <select
-                  name="port"
-                  value=${newDevice.port}
-                  onChange=${handleDevicePortChange}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  ${CONFIG.PORT_OPTIONS.map(
-                    ([value, label]) =>
-                      html`<option value=${value}>${label}</option>`
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Protocol
-                </label>
-                <select
-                  name="protocol"
-                  value=${newDevice.protocol}
-                  onChange=${(e) =>
-                    setNewDevice((prev) => ({
-                      ...prev,
-                      protocol: parseInt(e.target.value),
-                    }))}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  ${CONFIG.PROTOCOL_TYPES.map(
-                    ([value, label]) =>
-                      html`<option value=${value}>${label}</option>`
-                  )}
-                </select>
-              </div>
-              ${newDevice.port === 3 &&
+            <div class="grid grid-cols-2 gap-4">
+              ${Input({
+                type: "text",
+                label: "Device Name",
+                extra: `${newDevice.n.length}/20`,
+                name: "n",
+                value: newDevice.n,
+                onChange: handleInputChange,
+                required: true,
+                disabled: newDevice.p > 2,
+                maxLength: 20,
+              })}
+              ${Select({
+                label: "Port",
+                name: "p",
+                value: newDevice.p,
+                onChange: handleDevicePortChange,
+                required: true,
+                options: CONFIG.PORT_OPTIONS,
+              })}
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              ${Select({
+                label: "Protocol",
+                name: "pr",
+                value: newDevice.pr,
+                onChange: handleInputChange,
+                required: true,
+                options: CONFIG.PROTOCOL_TYPES,
+                disabled: newDevice.p > 2,
+              })}
+              ${Input({
+                type: "number",
+                label: "Slave Address",
+                extra: "(1-255)",
+                name: "da",
+                value: newDevice.da,
+                onChange: handleInputChange,
+                required: true,
+                disabled: newDevice.p === 3,
+                min: 1,
+                max: 255,
+              })}
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              ${Input({
+                type: "number",
+                label: "Polling Interval",
+                extra: "(100-65535)ms",
+                name: "pi",
+                value: newDevice.pi,
+                onChange: handleInputChange,
+                required: true,
+                min: 10,
+                max: 65535,
+                step: 10,
+              })}
+              ${Checkbox({
+                label: "Merge Collection",
+                name: "g",
+                value: newDevice.g,
+                onChange: handleInputChange,
+              })}
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              ${Checkbox({
+                label: "Enable Address Mapping",
+                name: "em",
+                value: newDevice.em,
+                onChange: handleInputChange,
+              })}
+              ${newDevice.em &&
               html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    Server Address
-                  </label>
-                  <input
-                    type="text"
-                    name="serverAddress"
-                    value=${newDevice.serverAddress}
-                    onChange=${(e) =>
-                      setNewDevice((prev) => ({
-                        ...prev,
-                        serverAddress: e.target.value,
-                      }))}
-                    maxlength="64"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    Server Port
-                  </label>
-                  <input
-                    type="number"
-                    name="serverPort"
-                    value=${newDevice.serverPort}
-                    onChange=${(e) =>
-                      setNewDevice((prev) => ({
-                        ...prev,
-                        serverPort: parseInt(e.target.value),
-                      }))}
-                    min="1"
-                    max="65535"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-              `}
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Polling Interval (ms)
-                </label>
-                <input
-                  type="number"
-                  name="pi"
-                  value=${newDevice.pi}
-                  onChange=${(e) =>
-                    setNewDevice((prev) => ({
-                      ...prev,
-                      pi: parseInt(e.target.value),
-                    }))}
-                  min="100"
-                  step="100"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div class="flex items-center">
-                <input
-                  type="checkbox"
-                  name="g"
-                  checked=${newDevice.g}
-                  onChange=${(e) =>
-                    setNewDevice((prev) => ({ ...prev, g: e.target.checked }))}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label class="ml-2 block text-sm text-gray-900">
-                  Merge Collection
-                </label>
-              </div>
-              <div class="flex items-center">
-                <input
-                  type="checkbox"
-                  name="enableMap"
-                  checked=${newDevice.enableMap}
-                  onChange=${(e) =>
-                    setNewDevice((prev) => ({
-                      ...prev,
-                      enableMap: e.target.checked,
-                    }))}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label class="ml-2 block text-sm text-gray-900">
-                  Enable Address Mapping
-                </label>
-              </div>
-              ${newDevice.enableMap &&
-              html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    Mapped Slave Address
-                  </label>
-                  <input
-                    type="number"
-                    name="mapDa"
-                    value=${newDevice.mapDa}
-                    onChange=${(e) =>
-                      setNewDevice((prev) => ({
-                        ...prev,
-                        mapDa: parseInt(e.target.value),
-                      }))}
-                    min="1"
-                    max="247"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+                ${Input({
+                  type: "number",
+                  label: "Mapped Slave Address",
+                  extra: "(1-255)",
+                  name: "ma",
+                  value: newDevice.ma,
+                  onChange: handleInputChange,
+                  required: newDevice.em,
+                  min: 1,
+                  max: 255,
+                })}
               `}
             </div>
-            <div class="flex justify-end space-x-3 mt-6">
+            <div class="grid grid-cols-2 gap-4">
+              ${newDevice.p === 2 &&
+              html`
+                ${Input({
+                  type: "text",
+                  label: "Server Address",
+                  name: "sa",
+                  value: newDevice.sa,
+                  onChange: handleInputChange,
+                  required: newDevice.p === 2,
+                  maxlength: 64,
+                  required: newDevice.p === 2,
+                })}
+                ${Input({
+                  type: "number",
+                  label: "Server Port",
+                  extra: "(255-65535)",
+                  name: "sp",
+                  value: newDevice.sp,
+                  onChange: handleInputChange,
+                  required: newDevice.p === 2,
+                  min: 255,
+                  max: 65535,
+                })}
+              `}
+            </div>
+            <div class="flex justify-center space-x-3 mt-6">
               <button
                 type="button"
                 onClick=${onClose}
@@ -1716,21 +1695,45 @@ function Devices() {
     const handleSubmit = (e) => {
       e.preventDefault();
 
-      const errors = validateDeviceConfig(newDevice);
+      // const errors = validateDeviceConfig(editingDevice, deviceIndex);
 
-      if (errors.length > 0) {
-        alert(errors.join("\n"));
-        return;
-      }
+      // if (errors.length > 0) {
+      //   alert(errors.join("\n"));
+      //   return;
+      // }
 
       onSubmit(deviceIndex);
+    };
+
+    const handleDevicePortChange = (e) => {
+      const selectedPort = parseInt(e.target.value);
+      if (selectedPort === 3) {
+        setEditingDevice((prev) => ({
+          ...prev,
+          n: "IO",
+          p: selectedPort,
+        }));
+      } else if (selectedPort === 4) {
+        setEditingDevice((prev) => ({
+          ...prev,
+          n: "VIRTUAL",
+          p: selectedPort,
+        }));
+      } else {
+        setEditingDevice((prev) => ({
+          ...prev,
+          p: selectedPort,
+        }));
+      }
     };
 
     return html`
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
-        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+        <div
+          class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
           <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-medium text-gray-900">Edit Device</h3>
             <button
@@ -1742,197 +1745,116 @@ function Devices() {
           </div>
           <form onSubmit=${handleSubmit} class="space-y-4">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Device Name
-                </label>
-                <input
-                  type="text"
-                  name="n"
-                  value=${editingDevice.n}
-                  onChange=${(e) =>
-                    setEditingDevice((prev) => ({
-                      ...prev,
-                      n: e.target.value,
-                    }))}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled=${editingDevice.port > 3}
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Slave Address
-                </label>
-                <input
-                  type="number"
-                  name="da"
-                  value=${editingDevice.da}
-                  onChange=${(e) =>
-                    setEditingDevice((prev) => ({
-                      ...prev,
-                      da: parseInt(e.target.value),
-                    }))}
-                  min="1"
-                  max="247"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Port
-                </label>
-                <select
-                  name="port"
-                  value=${editingDevice.port}
-                  onChange=${handleDevicePortChange}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  ${CONFIG.PORT_OPTIONS.map(
-                    ([value, label]) =>
-                      html`<option value=${value}>${label}</option>`
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Protocol
-                </label>
-                <select
-                  name="protocol"
-                  value=${editingDevice.protocol}
-                  onChange=${(e) =>
-                    setEditingDevice((prev) => ({
-                      ...prev,
-                      protocol: parseInt(e.target.value),
-                    }))}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  ${CONFIG.PROTOCOL_TYPES.map(
-                    ([value, label]) =>
-                      html`<option value=${value}>${label}</option>`
-                  )}
-                </select>
-              </div>
-              ${editingDevice.port === 3 &&
-              html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    Server Address
-                  </label>
-                  <input
-                    type="text"
-                    name="serverAddress"
-                    value=${editingDevice.serverAddress}
-                    onChange=${(e) =>
-                      setEditingDevice((prev) => ({
-                        ...prev,
-                        serverAddress: e.target.value,
-                      }))}
-                    maxlength="64"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    Server Port
-                  </label>
-                  <input
-                    type="number"
-                    name="serverPort"
-                    value=${editingDevice.serverPort}
-                    onChange=${(e) =>
-                      setEditingDevice((prev) => ({
-                        ...prev,
-                        serverPort: parseInt(e.target.value),
-                      }))}
-                    min="1"
-                    max="65535"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-              `}
-              <div>
-                <label class="block text-sm font-medium text-gray-700">
-                  Polling Interval (ms)
-                </label>
-                <input
-                  type="number"
-                  name="pi"
-                  value=${editingDevice.pi}
-                  onChange=${(e) =>
-                    setEditingDevice((prev) => ({
-                      ...prev,
-                      pi: parseInt(e.target.value),
-                    }))}
-                  min="100"
-                  step="100"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
+              ${Input({
+                type: "text",
+                label: "Device Name",
+                extra: `${editingDevice.n.length}/20`,
+                name: "n",
+                value: editingDevice.n,
+                onChange: handleEditInputChange,
+                required: true,
+                disabled: editingDevice.p > 2,
+                maxLength: 20,
+              })}
+              ${Select({
+                label: "Port",
+                name: "p",
+                value: editingDevice.p,
+                onChange: handleDevicePortChange,
+                required: true,
+                options: CONFIG.PORT_OPTIONS,
+              })}
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              ${Select({
+                label: "Protocol",
+                name: "pr",
+                value: editingDevice.pr,
+                onChange: handleInputChange,
+                required: true,
+                options: CONFIG.PROTOCOL_TYPES,
+              })}
+              ${Input({
+                type: "number",
+                label: "Slave Address",
+                extra: "(1-255)",
+                name: "da",
+                value: editingDevice.da,
+                onChange: handleInputChange,
+                required: true,
+                min: 1,
+                max: 255,
+              })}
+            </div>
 
-              <div class="flex items-center">
-                <input
-                  type="checkbox"
-                  name="g"
-                  checked=${editingDevice.g}
-                  onChange=${(e) =>
-                    setEditingDevice((prev) => ({
-                      ...prev,
-                      g: e.target.checked,
-                    }))}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label class="ml-2 block text-sm text-gray-900">
-                  Merge Collection
-                </label>
-              </div>
-              <div class="flex items-center">
-                <input
-                  type="checkbox"
-                  name="enableMap"
-                  checked=${editingDevice.enableMap}
-                  onChange=${(e) =>
-                    setEditingDevice((prev) => ({
-                      ...prev,
-                      enableMap: e.target.checked,
-                    }))}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label class="ml-2 block text-sm text-gray-900">
-                  Enable Address Mapping
-                </label>
-              </div>
-              ${editingDevice.enableMap &&
+            <div class="grid grid-cols-2 gap-4">
+              ${Input({
+                type: "number",
+                label: "Polling Interval",
+                extra: "(100-65535)ms",
+                name: "pi",
+                value: editingDevice.pi || 1000,
+                onChange: handleEditInputChange,
+                required: true,
+                min: 10,
+                max: 65535,
+                step: 10,
+              })}
+              ${Checkbox({
+                label: "Merge Collection",
+                name: "g",
+                value: editingDevice.g,
+                onChange: handleEditInputChange,
+              })}
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              ${Checkbox({
+                label: "Enable Address Mapping",
+                name: "em",
+                value: editingDevice.em,
+                onChange: handleEditInputChange,
+              })}
+              ${editingDevice.em &&
               html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700">
-                    Mapped Slave Address
-                  </label>
-                  <input
-                    type="number"
-                    name="mapDa"
-                    value=${editingDevice.mapDa}
-                    onChange=${(e) =>
-                      setEditingDevice((prev) => ({
-                        ...prev,
-                        mapDa: parseInt(e.target.value),
-                      }))}
-                    min="1"
-                    max="247"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+                ${Input({
+                  type: "number",
+                  label: "Mapped Slave Address",
+                  extra: "(1-255)",
+                  name: "ma",
+                  value: editingDevice.ma,
+                  onChange: handleEditInputChange,
+                  required: editingDevice.em,
+                  min: 1,
+                  max: 255,
+                })}
               `}
             </div>
-            <div class="flex justify-end space-x-3 mt-6">
+            <div class="grid grid-cols-2 gap-4">
+              ${editingDevice.p === 2 &&
+              html`
+                ${Input({
+                  type: "text",
+                  label: "Server Address",
+                  name: "sa",
+                  value: editingDevice.sa,
+                  onChange: handleEditInputChange,
+                  required: editingDevice.p === 2,
+                  maxlength: 64,
+                })}
+                ${Input({
+                  type: "number",
+                  label: "Server Port",
+                  extra: "(255-65535)",
+                  name: "sp",
+                  value: editingDevice.sp,
+                  onChange: handleEditInputChange,
+                  required: editingDevice.p === 2,
+                  min: 255,
+                  max: 65535,
+                })}
+              `}
+            </div>
+            <div class="flex justify-center space-x-3 mt-6">
               <button
                 type="button"
                 onClick=${onClose}
@@ -1969,19 +1891,14 @@ function Devices() {
       e.preventDefault();
       e.stopPropagation();
 
-      const errors = validateNodeConfig(newNode);
-
-      if (errors.length > 0) {
-        alert(errors.join("\n"));
-        return;
-      }
-
       onSubmit(e);
     };
 
+    // console.log(newNode);
+
     const handleNodeNameChange = (e) => {
       const selectedName = e.target.value;
-      if (devicePort === 4) {
+      if (devicePort === 3) {
         const selectedOption = IO_NODE_OPTIONS.find(
           (opt) => opt.name === selectedName
         );
@@ -1991,7 +1908,7 @@ function Devices() {
             ...prev,
             n: selectedName,
             a: selectedOption.ra,
-            f: selectedOption.fc,
+            fc: selectedOption.fc,
             dt: selectedOption.dt,
           }));
         }
@@ -2007,7 +1924,9 @@ function Devices() {
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div
+          class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
           <div class="px-6 py-4 border-b border-gray-200">
             <div class="flex justify-between items-center">
               <h3 class="text-lg font-semibold">
@@ -2043,214 +1962,150 @@ function Devices() {
           <div class="px-6 py-4">
             <form onSubmit=${handleSubmit} class="space-y-4">
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Name
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(max ${CONFIG.MAX_NAME_LENGTH} chars)</span
-                    >
-                  </label>
-                  ${devicePort == 4
-                    ? html`
-                        <select
-                          name="n"
-                          value=${newNode.n}
-                          onChange=${handleNodeNameChange}
-                          class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          required
-                        >
-                          ${IO_NODE_OPTIONS.map(
-                            (opt) =>
-                              html`<option value=${opt.name}>
-                                ${opt.name}
-                              </option>`
-                          )}
-                        </select>
-                      `
-                    : html` <input
-                        type="text"
-                        name="n"
-                        value=${newNode.n}
-                        onChange=${handleNodeInputChange}
-                        maxlength=${CONFIG.MAX_NAME_LENGTH}
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        placeholder="Node name"
-                        required
-                      />`}
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Register Address
-                  </label>
-                  <input
-                    type="text"
-                    name="a"
-                    value=${newNode.a}
-                    onChange=${handleNodeInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Register address"
-                    disabled=${devicePort === 4 &&
-                    IO_NODE_OPTIONS.some((opt) => opt.name === newNode.n)}
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Function code
-                  </label>
-                  <select
-                    name="f"
-                    value=${newNode.f}
-                    onChange=${handleNodeInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    disabled=${devicePort === 4 &&
-                    IO_NODE_OPTIONS.some((opt) => opt.name === newNode.n)}
-                  >
-                    ${CONFIG.FUNCTION_CODES.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Data type
-                  </label>
-                  <select
-                    name="dt"
-                    value=${newNode.dt}
-                    onChange=${handleNodeInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    disabled=${newNode.f === 1 ||
-                    newNode.f === 2 ||
-                    (devicePort === 4 &&
-                      IO_NODE_OPTIONS.some((opt) => opt.name === newNode.n))}
-                  >
-                    ${CONFIG.DATA_TYPES.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Timeout
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(${CONFIG.MIN_TIMEOUT}-${CONFIG.MAX_TIMEOUT} ms)</span
-                    >
-                  </label>
-                  <input
-                    type="number"
-                    name="t"
-                    value=${newNode.t}
-                    onChange=${handleNodeInputChange}
-                    min=${CONFIG.MIN_TIMEOUT}
-                    max=${CONFIG.MAX_TIMEOUT}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Timeout"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Reporting on Change
-                  </label>
-                  <div
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md flex items-center min-h-[42px]"
-                  >
-                    <label class="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="reportOnChange"
-                        checked=${newNode.reportOnChange}
-                        onChange=${handleNodeInputChange}
-                        class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                      />
-                      <span class="ml-2 text-gray-700">Enable</span>
-                    </label>
-                  </div>
-                </div>
-                ${newNode.reportOnChange &&
+                ${devicePort == 3
+                  ? html`
+                      ${Select({
+                        label: "Node Name",
+                        extra: `${newNode.n.length}/20`,
+                        name: "n",
+                        value: newNode.n,
+                        onChange: handleNodeNameChange,
+                        required: true,
+                        options_extra: IO_NODE_OPTIONS.map((opt) => ({
+                          value: opt.name,
+                          label: opt.name,
+                        })),
+                        required: true,
+                      })}
+                    `
+                  : html`
+                      ${Input({
+                        type: "text",
+                        label: "Node Name",
+                        extra: `${newNode.n.length}/20`,
+                        name: "n",
+                        value: newNode.n,
+                        onChange: handleNodeInputChange,
+                        required: true,
+                        maxlength: CONFIG.MAX_NAME_LENGTH,
+                        placeholder: "Node name",
+                      })}
+                    `}
+                ${Select({
+                  label: "Function Code",
+                  name: "fc",
+                  value: newNode.fc,
+                  onChange: handleNodeInputChange,
+                  required: true,
+                  options: CONFIG.FUNCTION_CODES,
+                  disabled:
+                    (devicePort === 3 &&
+                      IO_NODE_OPTIONS.some((opt) => opt.name === newNode.n)) ||
+                    devicePort === 4,
+                })}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Input({
+                  type: "text",
+                  label: "Register Address",
+                  extra: "(0-65535)",
+                  name: "a",
+                  value: newNode.a,
+                  onChange: handleNodeInputChange,
+                  required: true,
+                  placeholder: "Register address",
+                  disabled:
+                    devicePort === 3 &&
+                    IO_NODE_OPTIONS.some((opt) => opt.name === newNode.n),
+                })}
+                ${Select({
+                  label: "Data Type",
+                  name: "dt",
+                  value: newNode.dt,
+                  onChange: handleNodeInputChange,
+                  required: true,
+                  options: CONFIG.DATA_TYPES,
+                  disabled:
+                    devicePort === 3 &&
+                    IO_NODE_OPTIONS.some((opt) => opt.name === newNode.n),
+                })}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Input({
+                  type: "number",
+                  label: "Timeout",
+                  extra: "(100-65535)ms",
+                  name: "t",
+                  value: newNode.t,
+                  onChange: handleNodeInputChange,
+                  required: true,
+                  min: CONFIG.MIN_TIMEOUT,
+                  max: CONFIG.MAX_TIMEOUT,
+                  placeholder: "Timeout",
+                })}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Checkbox({
+                  label: "Reporting on Change",
+                  name: "er",
+                  value: newNode.er,
+                  onChange: handleNodeInputChange,
+                })}
+                ${newNode.er &&
                 html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      Variation Range
-                      <span class="text-xs text-gray-500 ml-1">(1-65535)</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="variationRange"
-                      value=${newNode.variationRange}
-                      onChange=${handleNodeInputChange}
-                      min="1"
-                      max="65535"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter variation range"
-                      required
-                    />
-                  </div>
+                  ${Input({
+                    type: "number",
+                    label: "Variation Range",
+                    extra: "(1-65535)",
+                    name: "vr",
+                    value: newNode.vr,
+                    onChange: handleNodeInputChange,
+                    min: 1,
+                    max: 65535,
+                    placeholder: "Variation range",
+                    required: newNode.er,
+                  })}
                 `}
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Enable Address Mapping
-                  </label>
-                  <div
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md flex items-center min-h-[42px]"
-                  >
-                    <label class="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="enableNodeMap"
-                        checked=${newNode.enableNodeMap}
-                        onChange=${handleNodeInputChange}
-                        class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                      />
-                      <span class="ml-2 text-gray-700">Enable</span>
-                    </label>
-                  </div>
-                </div>
-                ${newNode.enableNodeMap &&
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Checkbox({
+                  label: "Enable Address Mapping",
+                  name: "em",
+                  value: newNode.em,
+                  onChange: handleNodeInputChange,
+                })}
+                ${newNode.em &&
                 html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      Map Node Address
-                      <span class="text-xs text-gray-500 ml-1">(0-65534)</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="mapNodeAddress"
-                      value=${newNode.mapNodeAddress}
-                      onChange=${handleNodeInputChange}
-                      min="0"
-                      max="65534"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter map node address"
-                      required
-                    />
-                  </div>
+                  ${Input({
+                    type: "number",
+                    label: "Mapped Slave Address",
+                    extra: "(0-65534)",
+                    name: "ma",
+                    value: newNode.ma,
+                    onChange: handleNodeInputChange,
+                    required: newNode.em,
+                    min: 0,
+                    max: 65534,
+                    placeholder: "Mapped slave address",
+                  })}
                 `}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
                 <div class="col-span-2">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Calculation Formula
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(max 128 chars)</span
-                    >
-                  </label>
-                  <div class="relative">
-                    <input
-                      type="text"
-                      name="formula"
-                      value=${newNode.formula}
-                      onChange=${handleNodeInputChange}
-                      maxlength="128"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter calculation formula"
-                    />
-                    <div class="absolute right-2 top-2 text-xs text-gray-500">
-                      ${newNode.formula ? newNode.formula.length : 0}/128
-                    </div>
-                  </div>
+                  ${Input({
+                    type: "text",
+                    label: "Calculation Formula",
+                    name: "fo",
+                    extra: `${newNode.fo ? newNode.fo.length : 0}/20`,
+                    value: newNode.fo,
+                    onChange: handleNodeInputChange,
+                    maxlength: 20,
+                    placeholder: "Enter calculation formula",
+                    note: "The collected data is calculated by the formula and then uploaded. For example, collected value plus 100: <code class='text-blue-500'>node1+100</code>",
+                  })}
                 </div>
               </div>
-              <div class="flex justify-end space-x-3 mt-6">
+              <div class="flex justify-center space-x-3 mt-6">
                 <button
                   type="button"
                   onClick=${onClose}
@@ -2280,20 +2135,52 @@ function Devices() {
     editingNode,
     setEditingNode,
     nodeIndex,
+    devicePort,
   }) => {
     if (!isOpen) return null;
 
     const handleSubmit = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      // const errors = validateDeviceConfig(editingNode, nodeIndex);
+      // if (errors.length > 0) {
+      //   console.error("Validation errors:", errors);
+      //   return;
+      // }
       onSubmit(nodeIndex);
+    };
+
+    const handleNodeNameChange = (e) => {
+      const selectedName = e.target.value;
+      if (devicePort === 3) {
+        const selectedOption = IO_NODE_OPTIONS.find(
+          (opt) => opt.name === selectedName
+        );
+
+        if (selectedOption) {
+          setNewNode((prev) => ({
+            ...prev,
+            n: selectedName,
+            a: selectedOption.ra,
+            fc: selectedOption.fc,
+            dt: selectedOption.dt,
+          }));
+        }
+      } else {
+        setNewNode((prev) => ({
+          ...prev,
+          n: selectedName,
+        }));
+      }
     };
 
     return html`
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div
+          class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
           <div class="px-6 py-4 border-b border-gray-200">
             <div class="flex justify-between items-center">
               <h3 class="text-lg font-semibold">Edit Node</h3>
@@ -2320,186 +2207,149 @@ function Devices() {
           <div class="px-6 py-4">
             <form onSubmit=${handleSubmit} class="space-y-4">
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Name
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(max ${CONFIG.MAX_NAME_LENGTH} chars)</span
-                    >
-                  </label>
-                  <input
-                    type="text"
-                    name="n"
-                    value=${editingNode.n}
-                    onChange=${handleEditNodeInputChange}
-                    maxlength=${CONFIG.MAX_NAME_LENGTH}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Register Address
-                  </label>
-                  <input
-                    type="text"
-                    name="a"
-                    value=${editingNode.a}
-                    onChange=${handleEditNodeInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Function code
-                  </label>
-                  <select
-                    name="f"
-                    value=${editingNode.f}
-                    onChange=${handleEditNodeInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    ${CONFIG.FUNCTION_CODES.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Data type
-                  </label>
-                  <select
-                    name="dt"
-                    value=${editingNode.dt}
-                    onChange=${handleEditNodeInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    disabled=${editingNode.f === 1 || editingNode.f === 2}
-                  >
-                    ${CONFIG.DATA_TYPES.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Timeout
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(${CONFIG.MIN_TIMEOUT}-${CONFIG.MAX_TIMEOUT} ms)</span
-                    >
-                  </label>
-                  <input
-                    type="number"
-                    name="t"
-                    value=${editingNode.t}
-                    onChange=${handleEditNodeInputChange}
-                    min=${CONFIG.MIN_TIMEOUT}
-                    max=${CONFIG.MAX_TIMEOUT}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Reporting on Change
-                  </label>
-                  <div
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md flex items-center min-h-[42px]"
-                  >
-                    <label class="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="reportOnChange"
-                        checked=${editingNode.reportOnChange}
-                        onChange=${handleEditNodeInputChange}
-                        class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                      />
-                      <span class="ml-2 text-gray-700">Enable</span>
-                    </label>
-                  </div>
-                </div>
-                ${editingNode.reportOnChange &&
+                ${devicePort == 3
+                  ? html`
+                      ${Select({
+                        label: "Node Name",
+                        extra: `${editingNode.n.length}/20`,
+                        name: "n",
+                        value: editingNode.n,
+                        onChange: handleNodeNameChange,
+                        required: true,
+                        options_extra: IO_NODE_OPTIONS.map((opt) => ({
+                          value: opt.name,
+                          label: opt.name,
+                        })),
+                        required: true,
+                      })}
+                    `
+                  : html`
+                      ${Input({
+                        type: "text",
+                        label: "Node Name",
+                        extra: `${editingNode.n.length}/20`,
+                        name: "n",
+                        value: editingNode.n,
+                        onChange: handleNodeNameChange,
+                        required: true,
+                        maxlength: CONFIG.MAX_NAME_LENGTH,
+                        placeholder: "Node name",
+                      })}
+                    `}
+                ${Select({
+                  label: "Function Code",
+                  name: "fc",
+                  value: editingNode.fc,
+                  onChange: handleEditNodeInputChange,
+                  required: true,
+                  options: CONFIG.FUNCTION_CODES,
+                  disabled:
+                    devicePort === 3 &&
+                    IO_NODE_OPTIONS.some((opt) => opt.name === editingNode.n),
+                })}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Input({
+                  type: "text",
+                  label: "Register Address",
+                  extra: "(0-65535)",
+                  name: "a",
+                  value: editingNode.a,
+                  onChange: handleEditNodeInputChange,
+                  required: true,
+                  placeholder: "Register address",
+                  disabled:
+                    devicePort === 3 &&
+                    IO_NODE_OPTIONS.some((opt) => opt.name === editingNode.n),
+                })}
+                ${Select({
+                  label: "Data Type",
+                  name: "dt",
+                  value: editingNode.dt,
+                  onChange: handleEditNodeInputChange,
+                  required: true,
+                  options: CONFIG.DATA_TYPES,
+                  disabled:
+                    devicePort === 3 &&
+                    IO_NODE_OPTIONS.some((opt) => opt.name === editingNode.n),
+                })}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Input({
+                  type: "number",
+                  label: "Timeout",
+                  extra: "(100-65535)ms",
+                  name: "t",
+                  value: editingNode.t,
+                  onChange: handleEditNodeInputChange,
+                  required: true,
+                  min: CONFIG.MIN_TIMEOUT,
+                  max: CONFIG.MAX_TIMEOUT,
+                  placeholder: "Timeout",
+                })}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Checkbox({
+                  label: "Reporting on Change",
+                  name: "er",
+                  value: editingNode.er,
+                  onChange: handleEditNodeInputChange,
+                })}
+                ${editingNode.er &&
                 html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      Variation Range
-                      <span class="text-xs text-gray-500 ml-1">(1-65535)</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="variationRange"
-                      value=${editingNode.variationRange}
-                      onChange=${handleEditNodeInputChange}
-                      min="1"
-                      max="65535"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      required
-                    />
-                  </div>
+                  ${Input({
+                    type: "number",
+                    label: "Variation Range",
+                    extra: "(1-65535)",
+                    name: "vr",
+                    value: editingNode.vr,
+                    onChange: handleEditNodeInputChange,
+                    min: 1,
+                    max: 65535,
+                    placeholder: "Variation range",
+                    required: editingNode.er,
+                  })}
                 `}
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Enable Address Mapping
-                  </label>
-                  <div
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md flex items-center min-h-[42px]"
-                  >
-                    <label class="flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="enableNodeMap"
-                        checked=${editingNode.enableNodeMap}
-                        onChange=${handleEditNodeInputChange}
-                        class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                      />
-                      <span class="ml-2 text-gray-700">Enable</span>
-                    </label>
-                  </div>
-                </div>
-                ${editingNode.enableNodeMap &&
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                ${Checkbox({
+                  label: "Enable Address Mapping",
+                  name: "em",
+                  value: editingNode.em,
+                  onChange: handleEditNodeInputChange,
+                })}
+                ${editingNode.em &&
                 html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      Map Node Address
-                      <span class="text-xs text-gray-500 ml-1">(0-65534)</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="mapNodeAddress"
-                      value=${editingNode.mapNodeAddress}
-                      onChange=${handleEditNodeInputChange}
-                      min="0"
-                      max="65534"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      required
-                    />
-                  </div>
+                  ${Input({
+                    type: "number",
+                    label: "Mapped Slave Address",
+                    extra: "(0-65534)",
+                    name: "ma",
+                    value: editingNode.ma,
+                    onChange: handleEditNodeInputChange,
+                    required: editingNode.em,
+                    min: 0,
+                    max: 65534,
+                    placeholder: "Mapped slave address",
+                  })}
                 `}
+              </div>
+              <div class="grid grid-cols-2 gap-4">
                 <div class="col-span-2">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Calculation Formula
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(max 128 chars)</span
-                    >
-                  </label>
-                  <div class="relative">
-                    <input
-                      type="text"
-                      name="formula"
-                      value=${editingNode.formula}
-                      onChange=${handleEditNodeInputChange}
-                      maxlength="128"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                    <div class="absolute right-2 top-2 text-xs text-gray-500">
-                      ${editingNode.formula
-                        ? editingNode.formula.length
-                        : 0}/128
-                    </div>
-                  </div>
+                  ${Input({
+                    type: "text",
+                    label: "Calculation Formula",
+                    name: "fo",
+                    extra: `${editingNode.fo ? editingNode.fo.length : 0}/20`,
+                    value: editingNode.fo,
+                    onChange: handleEditNodeInputChange,
+                    maxlength: 20,
+                    placeholder: "Enter calculation formula",
+                    note: "The collected data is calculated by the formula and then uploaded. For example, collected value plus 100: <code class='text-blue-500'>node1+100</code>",
+                  })}
                 </div>
               </div>
-              <div class="flex justify-end space-x-3 mt-6">
+              <div class="flex justify-center space-x-3 mt-6">
                 <button
                   type="button"
                   onClick=${onClose}
@@ -2511,7 +2361,7 @@ function Devices() {
                   type="submit"
                   class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Save Changes
+                  Save
                 </button>
               </div>
             </form>
@@ -2546,7 +2396,9 @@ function Devices() {
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div
+          class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
           <div class="px-6 py-4 border-b border-gray-200">
             <div class="flex justify-between items-center">
               <h3 class="text-lg font-semibold">
@@ -2582,206 +2434,132 @@ function Devices() {
           <div class="px-6 py-4">
             <form onSubmit=${handleSubmit} class="space-y-4">
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Event Name <span class="text-red-500">*</span>
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(max 20 chars)</span
-                    >
-                  </label>
-                  <div class="relative">
-                    <input
-                      type="text"
-                      name="name"
-                      value=${newEvent.n}
-                      onChange=${handleEventInputChange}
-                      maxlength="20"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                    <div class="absolute right-2 top-2 text-xs text-gray-500">
-                      ${newEvent.n.length}/20
-                    </div>
-                  </div>
-                </div>
-                <div class="flex items-center">
-                  <label class="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="enabled"
-                      checked=${newEvent.e}
-                      onChange=${handleEventInputChange}
-                      class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span class="ml-2 text-sm text-gray-700">Enable Event</span>
-                  </label>
-                </div>
+                ${Input({
+                  type: "text",
+                  label: "Event Name",
+                  extra: `${newEvent.n.length}/20`,
+                  name: "n",
+                  value: newEvent.n,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  maxlength: 20,
+                  placeholder: "Enter event name",
+                })}
+                ${Checkbox({
+                  label: "Enable Event",
+                  name: "e",
+                  value: newEvent.e,
+                  onChange: handleEventInputChange,
+                })}
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Trigger Condition
-                  </label>
-                  <select
-                    name="triggerCondition"
-                    value=${newEvent.c}
-                    onChange=${handleEventInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    ${TRIGGER_CONDITIONS.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Trigger Point (Node Name)
-                    <span class="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="triggerPoint"
-                    value=${newEvent.p}
-                    onChange=${handleEventInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled=${getAllNodes.length === 0}
-                    required
-                  >
-                    <option value="">Select a node</option>
-                    ${getAllNodes.map(
-                      (node) =>
-                        html`<option value=${node.value}>${node.label}</option>`
-                    )}
-                  </select>
-                </div>
+                ${Select({
+                  label: "Trigger Condition",
+                  name: "c",
+                  value: newEvent.c,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  options: TRIGGER_CONDITIONS,
+                })}
+                ${Select({
+                  label: "Trigger Point",
+                  name: "p",
+                  value: newEvent.p,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  disabled: getAllNodes.length === 0,
+                  options_extra: getAllNodes,
+                })}
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Scanning Cycle (ms) <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="scanningCycle"
-                    value=${newEvent.sc}
-                    onChange=${handleEventInputChange}
-                    min="0"
-                    max="10000"
-                    step="100"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Min Trigger Interval (ms)
-                    <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="minTriggerInterval"
-                    value=${newEvent.mi}
-                    onChange=${handleEventInputChange}
-                    min="500"
-                    max="10000"
-                    step="100"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+                ${Input({
+                  type: "number",
+                  label: "Scanning Cycle",
+                  extra: "(0-10000)ms",
+                  name: "sc",
+                  value: newEvent.sc,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  min: 0,
+                  max: 10000,
+                  step: 10,
+                  placeholder: "Scanning cycle",
+                })}
+                ${Input({
+                  type: "number",
+                  label: "Min Trigger Interval",
+                  extra: "(500-10000)ms",
+                  name: "mi",
+                  value: newEvent.mi,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  min: 500,
+                  max: 10000,
+                  step: 100,
+                  placeholder: "Min trigger interval",
+                })}
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                ${getThresholdVisibility.showUpper &&
+                ${Input({
+                  type: "number",
+                  label: "Upper Threshold",
+                  name: "ut",
+                  value: newEvent.ut,
+                  onChange: handleEventInputChange,
+                  placeholder: "Enter upper threshold",
+                  required: [3, 5, 6, 7].includes(parseInt(newEvent.c)),
+                  disabled: !getThresholdVisibility.showUpper,
+                  note: "The threshold is a single point precision of 0-20000uA, and the other points are floating-point precision.",
+                })}
+                ${Input({
+                  type: "number",
+                  label: "Lower Threshold",
+                  name: "lt",
+                  value: newEvent.lt,
+                  onChange: handleEventInputChange,
+                  required: [4, 5, 6, 8].includes(parseInt(newEvent.c)),
+                  disabled: !getThresholdVisibility.showLower,
+                  placeholder: "Enter lower threshold",
+                  note: "The threshold is a single point precision of 0-20000uA, and the other points are floating-point precision.",
+                })}
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                ${Select({
+                  label: "Trigger Execution",
+                  name: "te",
+                  value: newEvent.te,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  options: TRIGGER_EXECUTIONS,
+                })}
+                ${showTriggerAction &&
                 html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      Upper Threshold <span class="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="upperThreshold"
-                      value=${newEvent.ut}
-                      onChange=${handleEventInputChange}
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter upper threshold"
-                      required=${[3, 5, 6, 7].includes(parseInt(newEvent.c))}
-                    />
-                  </div>
-                `}
-                ${getThresholdVisibility.showLower &&
-                html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      Lower Threshold <span class="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="lowerThreshold"
-                      value=${newEvent.lt}
-                      onChange=${handleEventInputChange}
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter lower threshold"
-                      required=${[4, 5, 6, 8].includes(parseInt(newEvent.c))}
-                    />
-                  </div>
+                  ${Select({
+                    label: "Trigger Action",
+                    name: "ta",
+                    value: newEvent.ta,
+                    onChange: handleEventInputChange,
+                    options: TRIGGER_ACTIONS,
+                  })}
                 `}
               </div>
+              ${Input({
+                type: "text",
+                label: "Event Description",
+                extra: `${newEvent.d.length}/20`,
+                name: "d",
+                value: newEvent.d,
+                onChange: handleEventInputChange,
+                placeholder: "Enter event description",
+                maxlength: 20,
+                required: true,
+              })}
 
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Trigger Execution
-                </label>
-                <select
-                  name="triggerExecution"
-                  value=${newEvent.te}
-                  onChange=${handleEventInputChange}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  ${TRIGGER_EXECUTIONS.map(
-                    ([value, label]) =>
-                      html`<option value=${value}>${label}</option>`
-                  )}
-                </select>
-              </div>
-
-              ${showTriggerAction &&
-              html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Trigger Action
-                  </label>
-                  <select
-                    name="triggerAction"
-                    value=${newEvent.ta}
-                    onChange=${handleEventInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    ${TRIGGER_ACTIONS.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-              `}
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Event Description
-                </label>
-                <textarea
-                  name="description"
-                  value=${newEvent.d}
-                  onChange=${handleEventInputChange}
-                  rows="3"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter event description"
-                ></textarea>
-              </div>
-
-              <div class="flex justify-end space-x-3 mt-4">
+              <div class="flex justify-center space-x-3 mt-4">
                 <button
                   type="button"
                   onClick=${onClose}
@@ -2829,7 +2607,9 @@ function Devices() {
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div
+          class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
           <div class="px-6 py-4 border-b border-gray-200">
             <div class="flex justify-between items-center">
               <h3 class="text-lg font-semibold">Edit Event</h3>
@@ -2856,210 +2636,129 @@ function Devices() {
           <div class="px-6 py-4">
             <form onSubmit=${handleSubmit} class="space-y-4">
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Event Name <span class="text-red-500">*</span>
-                    <span class="text-xs text-gray-500 ml-1"
-                      >(max 20 chars)</span
-                    >
-                  </label>
-                  <div class="relative">
-                    <input
-                      type="text"
-                      name="name"
-                      value=${editingEvent.n}
-                      onChange=${handleEventInputChange}
-                      maxlength="20"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                    <div class="absolute right-2 top-2 text-xs text-gray-500">
-                      ${editingEvent.n.length}/20
-                    </div>
-                  </div>
-                </div>
-                <div class="flex items-center">
-                  <label class="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="enabled"
-                      checked=${editingEvent.e}
-                      onChange=${handleEventInputChange}
-                      class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span class="ml-2 text-sm text-gray-700">Enable Event</span>
-                  </label>
-                </div>
+                ${Input({
+                  type: "text",
+                  label: "Event Name",
+                  extra: `${editingEvent.n.length}/20`,
+                  name: "n",
+                  value: editingEvent.n,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  maxlength: 20,
+                  placeholder: "Enter event name",
+                })}
+                ${Checkbox({
+                  label: "Enable Event",
+                  name: "e",
+                  value: editingEvent.e,
+                  onChange: handleEventInputChange,
+                })}
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Trigger Condition
-                  </label>
-                  <select
-                    name="triggerCondition"
-                    value=${editingEvent.c}
-                    onChange=${handleEventInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    ${TRIGGER_CONDITIONS.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Trigger Point (Node Name)
-                    <span class="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="triggerPoint"
-                    value=${editingEvent.p}
-                    onChange=${handleEventInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled=${getAllNodes.length === 0}
-                    required
-                  >
-                    <option value="">Select a node</option>
-                    ${getAllNodes.map(
-                      (node) =>
-                        html`<option value=${node.value}>${node.label}</option>`
-                    )}
-                  </select>
-                </div>
+                ${Select({
+                  label: "Trigger Condition",
+                  name: "c",
+                  value: editingEvent.c,
+                  onChange: handleEventInputChange,
+                  options: TRIGGER_CONDITIONS,
+                })}
+                ${Select({
+                  label: "Trigger Point",
+                  name: "p",
+                  value: editingEvent.p,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  disabled: getAllNodes.length === 0,
+                  options_extra: getAllNodes,
+                })}
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Scanning Cycle (ms) <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="scanningCycle"
-                    value=${editingEvent.sc}
-                    onChange=${handleEventInputChange}
-                    min="0"
-                    max="10000"
-                    step="100"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Min Trigger Interval (ms)
-                    <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="minTriggerInterval"
-                    value=${editingEvent.mi}
-                    onChange=${handleEventInputChange}
-                    min="500"
-                    max="10000"
-                    step="100"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
+                ${Input({
+                  type: "number",
+                  label: "Scanning Cycle",
+                  extra: "(0-10000)ms",
+                  name: "sc",
+                  value: editingEvent.sc,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  min: 0,
+                  max: 10000,
+                  step: 10,
+                  placeholder: "Scanning cycle",
+                })}
+                ${Input({
+                  type: "number",
+                  label: "Min Trigger Interval",
+                  extra: "(500-10000)ms",
+                  name: "mi",
+                  value: editingEvent.mi,
+                  onChange: handleEventInputChange,
+                  required: true,
+                  min: 500,
+                  max: 10000,
+                  step: 100,
+                  placeholder: "Min trigger interval",
+                })}
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                ${getThresholdVisibility.showUpper &&
-                html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      Upper Threshold <span class="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="upperThreshold"
-                      value=${editingEvent.ut}
-                      onChange=${handleEventInputChange}
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter upper threshold"
-                      required=${[3, 5, 6, 7].includes(
-                        parseInt(editingEvent.c)
-                      )}
-                    />
-                  </div>
-                `}
-                ${getThresholdVisibility.showLower &&
-                html`
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      Lower Threshold <span class="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="lowerThreshold"
-                      value=${editingEvent.lt}
-                      onChange=${handleEventInputChange}
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter lower threshold"
-                      required=${[4, 5, 6, 8].includes(
-                        parseInt(editingEvent.c)
-                      )}
-                    />
-                  </div>
-                `}
+                ${Input({
+                  type: "number",
+                  label: "Upper Threshold",
+                  name: "ut",
+                  value: editingEvent.ut,
+                  onChange: handleEventInputChange,
+                  placeholder: "Enter upper threshold",
+                  required: [3, 5, 6, 7].includes(parseInt(editingEvent.c)),
+                  disabled: !getThresholdVisibility.showUpper,
+                  note: "The threshold is a single point precision of 0-20000uA, and the other points are floating-point precision.",
+                })}
+                ${Input({
+                  type: "number",
+                  label: "Lower Threshold",
+                  name: "lt",
+                  value: editingEvent.lt,
+                  onChange: handleEventInputChange,
+                  required: [4, 5, 6, 8].includes(parseInt(editingEvent.c)),
+                  placeholder: "Enter lower threshold",
+                  disabled: !getThresholdVisibility.showLower,
+                  note: "The threshold is a single point precision of 0-20000uA, and the other points are floating-point precision.",
+                })}
               </div>
 
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Trigger Execution
-                </label>
-                <select
-                  name="triggerExecution"
-                  value=${editingEvent.te}
-                  onChange=${handleEventInputChange}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  ${TRIGGER_EXECUTIONS.map(
-                    ([value, label]) =>
-                      html`<option value=${value}>${label}</option>`
-                  )}
-                </select>
-              </div>
-
+              ${Select({
+                label: "Trigger Execution",
+                name: "te",
+                value: editingEvent.te,
+                onChange: handleEventInputChange,
+                required: true,
+                options: TRIGGER_EXECUTIONS,
+              })}
               ${showTriggerAction &&
               html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Trigger Action
-                  </label>
-                  <select
-                    name="triggerAction"
-                    value=${editingEvent.ta}
-                    onChange=${handleEventInputChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    ${TRIGGER_ACTIONS.map(
-                      ([value, label]) =>
-                        html`<option value=${value}>${label}</option>`
-                    )}
-                  </select>
-                </div>
+                ${Select({
+                  label: "Trigger Action",
+                  name: "ta",
+                  value: editingEvent.ta,
+                  onChange: handleEventInputChange,
+                  options: TRIGGER_ACTIONS,
+                })}
               `}
+              ${Input({
+                type: "text",
+                label: "Event Description",
+                extra: `${editingEvent.d.length}/20`,
+                name: "d",
+                value: editingEvent.d,
+                onChange: handleEventInputChange,
+                placeholder: "Enter event description",
+                maxlength: 20,
+                required: true,
+              })}
 
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Event Description
-                </label>
-                <textarea
-                  name="description"
-                  value=${editingEvent.d}
-                  onChange=${handleEventInputChange}
-                  rows="3"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter event description"
-                ></textarea>
-              </div>
-
-              <div class="flex justify-end space-x-3 mt-4">
+              <div class="flex justify-center space-x-3 mt-4">
                 <button
                   type="button"
                   onClick=${onClose}
@@ -3071,7 +2770,7 @@ function Devices() {
                   type="submit"
                   class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Save Changes
+                  Save
                 </button>
               </div>
             </form>
@@ -3080,6 +2779,8 @@ function Devices() {
       </div>
     `;
   };
+
+  console.log(reportConfig);
 
   const renderEdgeComputingTab = () => {
     return html`
@@ -3189,10 +2890,10 @@ function Devices() {
               <tr>
                 <${Th}>No.<//>
                 <${Th}>Name<//>
-                <${Th}>Slave Address<//>
-                <${Th}>Polling Interval<//>
                 <${Th}>Port<//>
                 <${Th}>Protocol<//>
+                <${Th}>Slave Address<//>
+                <${Th}>Polling Interval<//>
                 <${Th}>Address Mapping<//>
                 <${Th}>Merge Collection<//>
                 <${Th}>Actions<//>
@@ -3213,22 +2914,22 @@ function Devices() {
                       ${index + 1}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">${device.n}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      ${CONFIG.PORT_OPTIONS.find(
+                        ([value]) => value === device.p
+                      )?.[1]}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      ${CONFIG.PROTOCOL_TYPES.find(
+                        ([value]) => value === device.pr
+                      )?.[1]}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">${device.da}</td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       ${`${device.pi} ms`}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
-                      ${CONFIG.PORT_OPTIONS.find(
-                        ([value]) => value === device.port
-                      )?.[1]}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      ${CONFIG.PROTOCOL_TYPES.find(
-                        ([value]) => value === device.protocol
-                      )?.[1]}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      ${device.enableMap ? "Yes" : "No"}
+                      ${device.em ? "Yes" : "No"}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       ${device.g ? "Yes" : "No"}
@@ -3238,6 +2939,7 @@ function Devices() {
                         onClick=${(e) => {
                           e.stopPropagation();
                           startEditing(index);
+                          setPrevDeviceName(device.n);
                         }}
                         class="text-blue-600 hover:text-blue-900 mr-2"
                       >
@@ -3272,7 +2974,7 @@ function Devices() {
                 </span>
               </h2>
               <${Button}
-                onClick=${() => setIsAddingNode(true)}
+                onClick=${handleAddNode}
                 disabled=${totalNodes >= CONFIG.MAX_TOTAL_NODES}
                 variant="primary"
                 icon="PlusIcon"
@@ -3283,13 +2985,13 @@ function Devices() {
 
             <${AddNodeModal}
               isOpen=${isAddingNode}
-              onClose=${() => setIsAddingNode(false)}
+              onClose=${handleCancelAddNode}
               onSubmit=${handleNodeSubmit}
               newNode=${newNode}
               setNewNode=${setNewNode}
               totalNodes=${totalNodes}
               maxNodes=${CONFIG.MAX_TOTAL_NODES}
-              devicePort=${devices[selectedDevice].port}
+              devicePort=${devices[selectedDevice].p}
             />
 
             <${EditNodeModal}
@@ -3299,6 +3001,7 @@ function Devices() {
               editingNode=${editingNode}
               setEditingNode=${setEditingNode}
               nodeIndex=${editingNodeIndex}
+              devicePort=${devices[selectedDevice].p}
             />
 
             <!-- Nodes Table -->
@@ -3328,12 +3031,12 @@ function Devices() {
                         <td class="px-6 py-4 whitespace-nowrap">${node.a}</td>
                         <td class="px-6 py-4 whitespace-nowrap">
                           ${CONFIG.FUNCTION_CODES.find(
-                            ([value]) => value === node.f
+                            ([value]) => value === node.fc
                           )?.[1]}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                           ${CONFIG.DATA_TYPES.find(
-                            ([value]) => value === parseInt(node.dt)
+                            ([value]) => value === node.dt
                           )?.[1]}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -3371,391 +3074,239 @@ function Devices() {
     return html`
       <!-- Data Report Tab Content -->
       <div class="max-w-[60%] mx-auto">
-        <div class="space-y-6">
+        <div class="space-y-4">
           <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="space-y-6">
+            <div class="space-y-4">
               <div>
                 <h2 class="text-xl font-semibold mb-4">Data channel</h2>
 
                 <!-- Channel Selection -->
-                <div class="mb-6">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Report Channel
-                  </label>
-                  <select
-                    name="channel"
-                    value=${reportConfig.channel}
-                    onChange=${handleReportConfigChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    ${CONFIG.REPORT_CHANNELS.map(
-                      ([value, label]) => html`
-                        <option value=${value}>${label}</option>
-                      `
-                    )}
-                  </select>
-                </div>
+                ${Select({
+                  name: "channel",
+                  label: "Report Channel",
+                  value: reportConfig.channel,
+                  onChange: handleReportConfigChange,
+                  options: CONFIG.REPORT_CHANNELS,
+                })}
               </div>
             </div>
           </div>
 
           <!-- MQTT Configuration -->
           <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="mb-6 space-y-4">
+            <div class="space-y-4">
               <h2 class="text-xl font-semibold mb-4">Data Query/Set</h2>
-              <div>
-                <div class="flex items-center space-x-4">
-                  <input
-                    type="checkbox"
-                    name="mqttDataQuerySet"
-                    checked=${reportConfig.mqttDataQuerySet}
-                    onChange=${handleReportConfigChange}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="text-sm text-gray-700"
-                    >Enable Data Query/Set</span
-                  >
-                </div>
-              </div>
-
+              ${Checkbox({
+                name: "mqttDataQuerySet",
+                label: "Enable Data Query/Set",
+                value: reportConfig.mqttDataQuerySet,
+                onChange: handleReportConfigChange,
+              })}
               ${reportConfig.mqttDataQuerySet &&
               html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Query or Set Type
-                  </label>
-                  <select
-                    name="mqttQuerySetType"
-                    value=${reportConfig.mqttQuerySetType}
-                    onChange=${handleReportConfigChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    ${CONFIG.QUERY_SET_TYPES.map(
-                      ([value, label]) => html` <option value=${value}>
-                        ${label}
-                      </option>`
-                    )}
-                  </select>
-                </div>
+                ${Select({
+                  name: "mqttQuerySetType",
+                  label: "Query or Set Type",
+                  value: reportConfig.mqttQuerySetType,
+                  onChange: handleReportConfigChange,
+                  options: CONFIG.QUERY_SET_TYPES,
+                })}
               `}
               ${reportConfig.mqttDataQuerySet &&
               reportConfig.channel === 1 &&
               html`
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Query or Set Topic
-                  </label>
-                  <input
-                    type="text"
-                    name="mqttQuerySetTopic"
-                    value=${reportConfig.mqttQuerySetTopic}
-                    onChange=${handleReportConfigChange}
-                    maxlength="64"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter query/set topic"
-                    maxlength="64"
-                  />
-                </div>
-
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Query or Set QoS
-                  </label>
-                  <select
-                    name="mqttQuerySetQos"
-                    value=${reportConfig.mqttQuerySetQos}
-                    onChange=${handleReportConfigChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="0">QOS0 - At most once</option>
-                    <option value="1">QOS1 - At least once</option>
-                    <option value="2">QOS2 - Exactly once</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Respond Topic
-                  </label>
-                  <input
-                    type="text"
-                    name="mqttRespondTopic"
-                    value=${reportConfig.mqttRespondTopic}
-                    onChange=${handleReportConfigChange}
-                    maxlength="64"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter respond topic"
-                    maxlength="64"
-                  />
-                </div>
-
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Respond QoS
-                  </label>
-                  <select
-                    name="mqttRespondQos"
-                    value=${reportConfig.mqttRespondQos}
-                    onChange=${handleReportConfigChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="0">QOS0 - At most once</option>
-                    <option value="1">QOS1 - At least once</option>
-                    <option value="2">QOS2 - Exactly once</option>
-                  </select>
-                </div>
-
-                <div class="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="mqttRetainedMessage"
-                    checked=${reportConfig.mqttRetainedMessage}
-                    onChange=${handleReportConfigChange}
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="ml-2 text-sm text-gray-700"
-                    >Retained Message</span
-                  >
-                </div>
+                ${Input({
+                  type: "text",
+                  name: "mqttQuerySetTopic",
+                  extra: `${reportConfig.mqttQuerySetTopic.length}/64`,
+                  label: "Query or Set Topic",
+                  value: reportConfig.mqttQuerySetTopic,
+                  onChange: handleReportConfigChange,
+                  maxlength: 64,
+                  placeholder: "Enter query/set topic",
+                })}
+                ${Select({
+                  name: "mqttQuerySetQos",
+                  label: "Query or Set QoS",
+                  value: reportConfig.mqttQuerySetQos,
+                  onChange: handleReportConfigChange,
+                  options: CONFIG.MQTT_QOS_OPTIONS,
+                })}
+                ${Input({
+                  type: "text",
+                  name: "mqttRespondTopic",
+                  extra: `${reportConfig.mqttRespondTopic.length}/64`,
+                  label: "Respond Topic",
+                  value: reportConfig.mqttRespondTopic,
+                  onChange: handleReportConfigChange,
+                  maxlength: 64,
+                  placeholder: "Enter respond topic",
+                })}
+                ${Checkbox({
+                  name: "mqttRetainedMessage",
+                  label: "Retained Message",
+                  value: reportConfig.mqttRetainedMessage,
+                  onChange: handleReportConfigChange,
+                })}
               `}
             </div>
           </div>
           <div class="bg-white rounded-lg shadow-md p-6">
             <h2 class="text-xl font-semibold mb-4">Data Report of nodes</h2>
             <!-- Enable/Disable -->
-            <div class="mb-6">
-              <label class="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="enabled"
-                  checked=${reportConfig.enabled}
-                  onChange=${handleReportConfigChange}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span class="ml-2 text-sm text-gray-700"
-                  >Enable Data Reporting</span
-                >
-              </label>
+            <div class="mb-4">
+              ${Checkbox({
+                name: "enabled",
+                label: "Enable Data Reporting",
+                value: reportConfig.enabled,
+                onChange: handleReportConfigChange,
+              })}
             </div>
 
-            <!-- MQTT Configuration -->
-            ${reportConfig.channel === 1 &&
+            ${reportConfig.enabled &&
             html`
-              <div class="mb-6 space-y-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Report Topic
-                  </label>
-                  <input
-                    type="text"
-                    name="mqttTopic"
-                    value=${reportConfig.mqttTopic}
-                    onChange=${handleReportConfigChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled=${!reportConfig.enabled}
-                    placeholder="Enter MQTT topic"
-                    maxlength="64"
-                  />
+              <!-- MQTT Configuration -->
+              ${reportConfig.channel === 1 &&
+              html`
+                <div class="mb-4 space-y-4">
+                  ${Input({
+                    type: "text",
+                    name: "mqttTopic",
+                    label: "Report Topic",
+                    value: reportConfig.mqttTopic,
+                    onChange: handleReportConfigChange,
+                    maxlength: 64,
+                    placeholder: "Enter report topic",
+                  })}
+                  ${Select({
+                    name: "mqttQos",
+                    label: "QoS Level",
+                    value: reportConfig.mqttQos,
+                    onChange: handleReportConfigChange,
+                    options: CONFIG.MQTT_QOS_OPTIONS,
+                  })}
                 </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    QoS Level
-                  </label>
-                  <select
-                    name="mqttQos"
-                    value=${reportConfig.mqttQos}
+              `}
+
+              <!-- Periodic Reporting -->
+              <div class="mb-4 space-y-4">
+                ${Checkbox({
+                  name: "periodicEnabled",
+                  label: "Enable Periodic Reporting",
+                  value: reportConfig.periodicEnabled,
+                  onChange: handleReportConfigChange,
+                })}
+                ${reportConfig.periodicEnabled &&
+                html`
+                  ${Input({
+                    type: "number",
+                    name: "periodicInterval",
+                    extra: "(1-36000)s",
+                    label: "Reporting Interval",
+                    value: reportConfig.periodicInterval,
+                    onChange: handleReportConfigChange,
+                    min: 1,
+                    max: 36000,
+                  })}
+                `}
+              </div>
+
+              <!-- Regular Reporting -->
+              <div class="mb-4 space-y-4">
+                ${Checkbox({
+                  name: "regularEnabled",
+                  label: "Enable Regular Reporting",
+                  value: reportConfig.regularEnabled,
+                  onChange: handleReportConfigChange,
+                })}
+                ${reportConfig.regularEnabled &&
+                html`
+                  ${Select({
+                    name: "regularInterval",
+                    label: "Regular Time",
+                    value: reportConfig.regularInterval,
+                    onChange: handleReportConfigChange,
+                    options: CONFIG.REPORT_INTERVALS,
+                  })}
+                  ${reportConfig.regularInterval === 4 &&
+                  html`
+                    ${Input({
+                      type: "time",
+                      name: "regularFixedTime",
+                      label: "Fixed Time",
+                      value: reportConfig.regularFixedTime,
+                      onChange: handleReportConfigChange,
+                    })}
+                  `}
+                `}
+              </div>
+
+              <!-- Failure Padding -->
+              <div class="mb-4 space-y-4">
+                ${Checkbox({
+                  name: "failurePaddingEnabled",
+                  label: "Enable Failure Padding",
+                  value: reportConfig.failurePaddingEnabled,
+                  onChange: handleReportConfigChange,
+                })}
+                ${reportConfig.failurePaddingEnabled &&
+                html`
+                  ${Input({
+                    type: "text",
+                    name: "failurePaddingContent",
+                    label: "Content of Padding",
+                    value: reportConfig.failurePaddingContent,
+                    onChange: handleReportConfigChange,
+                    maxlength: 16,
+                  })}
+                `}
+              </div>
+
+              <!-- Quotation Mark -->
+              <div class="mb-4">
+                ${Checkbox({
+                  name: "quotationMark",
+                  label: "Quotation Mark",
+                  value: reportConfig.quotationMark,
+                  onChange: handleReportConfigChange,
+                })}
+              </div>
+
+              <!-- JSON Template -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  JSON Template
+                  <span class="text-xs text-gray-500 ml-1">
+                    (max ${CONFIG.MAX_JSON_TEMPLATE_BYTES} bytes)
+                  </span>
+                </label>
+                <div class="relative">
+                  <textarea
+                    name="jsonTemplate"
+                    value=${reportConfig.jsonTemplate}
                     onChange=${handleReportConfigChange}
+                    rows="4"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled=${!reportConfig.enabled}
-                  >
-                    ${CONFIG.MQTT_QOS_OPTIONS.map(
-                      ([value, label]) => html`
-                        <option value=${value}>${label}</option>
-                      `
-                    )}
-                  </select>
+                    placeholder="Enter JSON template"
+                  ></textarea>
+                  <div class="absolute right-2 bottom-2 text-xs text-gray-500">
+                    ${getStringBytes(
+                      reportConfig.jsonTemplate
+                    )}/${CONFIG.MAX_JSON_TEMPLATE_BYTES}
+                    bytes
+                  </div>
+                </div>
+                ${jsonTemplateError &&
+                html`
+                  <div class="mt-1 text-sm text-red-600">
+                    ${jsonTemplateError}
+                  </div>
+                `}
+                <div class="mt-1 text-xs text-gray-500">
+                  Example format: {"device":"device1","value":"123"}
                 </div>
               </div>
             `}
-
-            <!-- Periodic Reporting -->
-            <div class="mb-6">
-              <label class="flex items-center cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  name="periodicEnabled"
-                  checked=${reportConfig.periodicEnabled}
-                  onChange=${handleReportConfigChange}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  disabled=${!reportConfig.enabled}
-                />
-                <span class="ml-2 text-sm text-gray-700"
-                  >Enable Periodic Reporting</span
-                >
-              </label>
-              ${reportConfig.periodicEnabled &&
-              html`
-                <div class="ml-6">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Reporting Interval (1-36000 seconds)
-                  </label>
-                  <input
-                    type="number"
-                    name="periodicInterval"
-                    value=${reportConfig.periodicInterval}
-                    onChange=${handleReportConfigChange}
-                    min="1"
-                    max="36000"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled=${!reportConfig.enabled}
-                  />
-                </div>
-              `}
-            </div>
-
-            <!-- Regular Reporting -->
-            <div class="mb-6">
-              <label class="flex items-center cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  name="regularEnabled"
-                  checked=${reportConfig.regularEnabled}
-                  onChange=${handleReportConfigChange}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  disabled=${!reportConfig.enabled}
-                />
-                <span class="ml-2 text-sm text-gray-700"
-                  >Enable Regular Reporting</span
-                >
-              </label>
-              ${reportConfig.regularEnabled &&
-              html`
-                <div class="ml-6 space-y-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                      Regular Time
-                    </label>
-                    <select
-                      name="regularInterval"
-                      value=${reportConfig.regularInterval}
-                      onChange=${handleReportConfigChange}
-                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled=${!reportConfig.enabled}
-                    >
-                      ${CONFIG.REPORT_INTERVALS.map(
-                        ([value, label]) => html`
-                          <option value=${value}>${label}</option>
-                        `
-                      )}
-                    </select>
-                  </div>
-                  ${reportConfig.regularInterval === 4 &&
-                  html`
-                    <div>
-                      <label
-                        class="block text-sm font-medium text-gray-700 mb-2"
-                      >
-                        Fixed Time (24-hour format)
-                      </label>
-                      <input
-                        type="time"
-                        name="regularFixedTime"
-                        value=${reportConfig.regularFixedTime}
-                        onChange=${handleTimeChange}
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled=${!reportConfig.enabled}
-                      />
-                    </div>
-                  `}
-                </div>
-              `}
-            </div>
-
-            <!-- Failure Padding -->
-            <div class="mb-6">
-              <label class="flex items-center cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  name="failurePaddingEnabled"
-                  checked=${reportConfig.failurePaddingEnabled}
-                  onChange=${handleReportConfigChange}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  disabled=${!reportConfig.enabled}
-                />
-                <span class="ml-2 text-sm text-gray-700"
-                  >Enable Failure Padding</span
-                >
-              </label>
-              ${reportConfig.failurePaddingEnabled &&
-              html`
-                <div class="ml-6">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Content of Padding
-                  </label>
-                  <input
-                    type="text"
-                    name="failurePaddingContent"
-                    value=${reportConfig.failurePaddingContent}
-                    onChange=${handleReportConfigChange}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled=${!reportConfig.enabled}
-                    placeholder="Enter padding content"
-                    maxlength="16"
-                  />
-                </div>
-              `}
-            </div>
-
-            <!-- Quotation Mark -->
-            <div class="mb-6">
-              <label class="flex items-center cursor-pointer mb-2">
-                <input
-                  type="checkbox"
-                  name="quotationMark"
-                  checked=${reportConfig.quotationMark}
-                  onChange=${handleReportConfigChange}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  disabled=${!reportConfig.enabled}
-                />
-                <span class="ml-2 text-sm text-gray-700">Quotation Mark</span>
-              </label>
-            </div>
-
-            <!-- JSON Template -->
-            <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                JSON Template
-                <span class="text-xs text-gray-500 ml-1">
-                  (max ${CONFIG.MAX_JSON_TEMPLATE_BYTES} bytes)
-                </span>
-              </label>
-              <div class="relative">
-                <textarea
-                  name="jsonTemplate"
-                  value=${reportConfig.jsonTemplate}
-                  onChange=${handleReportConfigChange}
-                  rows="4"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!reportConfig.enabled}
-                  placeholder="Enter JSON template"
-                ></textarea>
-                <div class="absolute right-2 bottom-2 text-xs text-gray-500">
-                  ${getStringBytes(
-                    reportConfig.jsonTemplate
-                  )}/${CONFIG.MAX_JSON_TEMPLATE_BYTES}
-                  bytes
-                </div>
-              </div>
-              ${jsonTemplateError &&
-              html`
-                <div class="mt-1 text-sm text-red-600">
-                  ${jsonTemplateError}
-                </div>
-              `}
-              <div class="mt-1 text-xs text-gray-500">
-                Example format: {"device": "device1", "value": "123"}
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -3809,7 +3360,7 @@ function Devices() {
         />
 
         <!-- Events List -->
-        <div class="bg-gray-50 p-4 rounded-lg">
+        <div class="bg-gray-50 rounded-lg">
           ${eventError &&
           html`
             <div
@@ -3901,13 +3452,19 @@ function Devices() {
                           >
                             <div class="flex space-x-2">
                               <button
-                                onClick=${() => startEditingEvent(event)}
+                                onClick=${(e) => {
+                                  e.stopPropagation();
+                                  startEditingEvent(event);
+                                }}
                                 class="text-blue-600 hover:text-blue-900"
                               >
                                 Edit
                               </button>
                               <button
-                                onClick=${() => deleteEvent(event.id)}
+                                onClick=${(e) => {
+                                  e.stopPropagation();
+                                  deleteEvent(event.id);
+                                }}
                                 class="text-red-600 hover:text-red-900"
                               >
                                 Delete
@@ -3930,6 +3487,9 @@ function Devices() {
     document.title = "SBIOT-Devices";
     fetchDeviceConfig();
   }, []);
+
+  // console.table(devices);
+  // console.table(events);
 
   // console.table(reportConfig);
   // Update the tabs array to include Edge Computing

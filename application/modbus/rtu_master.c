@@ -6,7 +6,8 @@
 #include "rtu_master.h"
 #include "agile_modbus.h"
 #include "cJSON.h"
-#include "db.h"
+#include "tinyexpr.h"
+#include "../database/db.h"
 #include "../web_server/net.h"
 #include "../web_server/websocket.h"
 #include "../log/log_output.h"
@@ -26,9 +27,115 @@ static int method_ws_log = 0;
 
 static char* build_node_json(const char *node_name, node_t *node);
 
+// Global variables for formula calculation
+static te_variable *g_formula_vars = NULL;
+static int g_formula_var_count = 0;
 
-static int rtu_master_send(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout)
-{
+// Initialize formula variables array
+static int init_formula_vars(void) {
+    device_t *current_device = device_get_config();
+    if (!current_device) {
+        DBG_ERROR("Failed to get device configuration for formula");
+        return -1;
+    }
+
+    // Count total number of nodes
+    int var_count = 0;
+    device_t *dev = current_device;
+    while (dev) {
+        node_t *n = dev->nodes;
+        while (n) {
+            var_count++;
+            n = n->next;
+        }
+        dev = dev->next;
+    }
+
+    // Allocate variables array
+    g_formula_vars = calloc(var_count + 1, sizeof(te_variable));
+    if (!g_formula_vars) {
+        DBG_ERROR("Failed to allocate memory for formula variables");
+        return -1;
+    }
+
+    // Populate variables array with direct node values
+    int var_index = 0;
+    dev = current_device;
+    while (dev) {
+        node_t *n = dev->nodes;
+        while (n) {
+            g_formula_vars[var_index].name = n->name;
+            // Store direct pointer to node value based on data type
+            switch (n->data_type) {
+                case DATA_TYPE_BOOLEAN:
+                    g_formula_vars[var_index].address = &n->value.bool_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_INT8:
+                    g_formula_vars[var_index].address = &n->value.int8_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_UINT8:
+                    g_formula_vars[var_index].address = &n->value.uint8_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_INT16:
+                    g_formula_vars[var_index].address = &n->value.int16_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_UINT16:
+                    g_formula_vars[var_index].address = &n->value.uint16_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_INT32_ABCD:
+                case DATA_TYPE_INT32_CDAB:
+                    g_formula_vars[var_index].address = &n->value.int32_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_UINT32_ABCD:
+                case DATA_TYPE_UINT32_CDAB:
+                    g_formula_vars[var_index].address = &n->value.uint32_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_FLOAT_ABCD:
+                case DATA_TYPE_FLOAT_CDAB:
+                    g_formula_vars[var_index].address = &n->value.float_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                case DATA_TYPE_DOUBLE:
+                    g_formula_vars[var_index].address = &n->value.double_val;
+                    g_formula_vars[var_index].type = TE_FUNCTION1;
+                    break;
+                default:
+                    DBG_ERROR("Unsupported data type for node in formula: %s", n->name);
+                    g_formula_vars[var_index].address = NULL;
+                    g_formula_vars[var_index].type = 0;
+                    break;
+            }
+            g_formula_vars[var_index].context = 0;
+            var_index++;
+            n = n->next;
+        }
+        dev = dev->next;
+    }
+    g_formula_vars[var_count].name = 0;  // Terminate array
+    g_formula_var_count = var_count;
+
+    DBG_INFO("Initialized formula variables array with %d nodes", var_count);
+    return 0;
+}
+
+// Free formula variables array
+static void free_formula_vars(void) {
+    if (g_formula_vars) {
+        free(g_formula_vars);
+        g_formula_vars = NULL;
+        g_formula_var_count = 0;
+    }
+}
+
+// Send data to serial or TCP port
+static int rtu_master_send(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout){
     int send_len;
 
     if(port <= 1)
@@ -42,8 +149,8 @@ static int rtu_master_send(int port, int fd, uint8_t *buf, int len, int timeout,
     return send_len;
 }
 
-static int rtu_master_receive(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout)
-{
+// Receive data from serial or TCP port
+static int rtu_master_receive(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout){
     int read_len;
 
     if(port <= 1)
@@ -57,8 +164,8 @@ static int rtu_master_receive(int port, int fd, uint8_t *buf, int len, int timeo
     return read_len;
 }
 
-static void rtu_master_flush_rx(int port, int fd)
-{
+// Flush receive buffer of serial or TCP port
+static void rtu_master_flush_rx(int port, int fd){
     if(port <= 1)
     {
         serial_flush_rx(fd);
@@ -69,74 +176,236 @@ static void rtu_master_flush_rx(int port, int fd)
     }
 }
 
-// Convert raw data based on data type with bounds checking
-static int convert_node_value(node_t *node, uint16_t *raw_data) {
-    if (!node || !raw_data) return RTU_MASTER_INVALID;
-    
+// Get node value by node name for formula calculation
+static double get_node_value_for_formula(const char *node_name) {
+    if (!node_name) {
+        DBG_ERROR("Invalid node name for formula calculation");
+        return 0.0;
+    }
+
+    device_t *current_device = device_get_config();
+    if (!current_device) {
+        DBG_ERROR("Failed to get device configuration for formula");
+        return 0.0;
+    }
+
+    while (current_device) {
+        node_t *current_node = current_device->nodes;
+        while (current_node) {
+            if (strcmp(current_node->name, node_name) == 0) {
+                // Convert node value to double based on data type
+                switch (current_node->data_type) {
+                    case DATA_TYPE_BOOLEAN:
+                        return (double)current_node->value.bool_val;
+                    case DATA_TYPE_INT8:
+                        return (double)current_node->value.int8_val;
+                    case DATA_TYPE_UINT8:
+                        return (double)current_node->value.uint8_val;
+                    case DATA_TYPE_INT16:
+                        return (double)current_node->value.int16_val;
+                    case DATA_TYPE_UINT16:
+                        return (double)current_node->value.uint16_val;
+                    case DATA_TYPE_INT32_ABCD:
+                    case DATA_TYPE_INT32_CDAB:
+                        return (double)current_node->value.int32_val;
+                    case DATA_TYPE_UINT32_ABCD:
+                    case DATA_TYPE_UINT32_CDAB:
+                        return (double)current_node->value.uint32_val;
+                    case DATA_TYPE_FLOAT_ABCD:
+                    case DATA_TYPE_FLOAT_CDAB:
+                        return (double)current_node->value.float_val;
+                    case DATA_TYPE_DOUBLE:
+                        return current_node->value.double_val;
+                    default:
+                        DBG_ERROR("Unsupported data type for node in formula: %s", node_name);
+                        return 0.0;
+                }
+            }
+            current_node = current_node->next;
+        }
+        current_device = current_device->next;
+    }
+
+    DBG_ERROR("Node not found for formula calculation: %s", node_name);
+    return 0.0;
+}
+
+// Convert raw data to appropriate data type and store in node
+static int convert_node_value(node_t *node, uint16_t *data) {
+    if (!node || !data) return RTU_MASTER_INVALID;
+
+    // Store previous value before updating
+    node->previous_value = node->value;
+
+    // Convert raw data to appropriate data type
     switch (node->data_type) {
         case DATA_TYPE_BOOLEAN:
             if (node->function == 1 || node->function == 2) {
-                // For coils and discrete inputs, each bit is expanded to a uint8_t
-                node->value.bool_val = (((uint8_t *)raw_data)[0] != 0);
+                node->value.bool_val = (((uint8_t *)data)[0] != 0);
             } else {
-                node->value.bool_val = (raw_data[0] != 0);
+                node->value.bool_val = (data[0] != 0);
             }
             break;
-
         case DATA_TYPE_INT8:
-            node->value.int8_val = (int8_t)raw_data[0];
+            node->value.int8_val = (int8_t)data[0];
             break;
-
         case DATA_TYPE_UINT8:
-            node->value.uint8_val = (uint8_t)raw_data[0];
+            node->value.uint8_val = (uint8_t)data[0];
             break;
-
         case DATA_TYPE_INT16:
-            node->value.int16_val = (int16_t)raw_data[0];
+            node->value.int16_val = (int16_t)data[0];
             break;
-
         case DATA_TYPE_UINT16:
-            node->value.uint16_val = raw_data[0];
+            node->value.uint16_val = data[0];
             break;
-
         case DATA_TYPE_INT32_ABCD:
-        case DATA_TYPE_INT32_CDAB: {
-            uint32_t temp = (node->data_type == DATA_TYPE_INT32_ABCD) ?
-                ((uint32_t)raw_data[0] << 16) | raw_data[1] :
-                ((uint32_t)raw_data[1] << 16) | raw_data[0];
-            node->value.int32_val = (int32_t)temp;
+            node->value.int32_val = (int32_t)((data[0] << 16) | data[1]);
             break;
-        }
-
+        case DATA_TYPE_INT32_CDAB:
+            node->value.int32_val = (int32_t)((data[1] << 16) | data[0]);
+            break;
         case DATA_TYPE_UINT32_ABCD:
+            node->value.uint32_val = (uint32_t)((data[0] << 16) | data[1]);
+            break;
         case DATA_TYPE_UINT32_CDAB:
-            node->value.uint32_val = (node->data_type == DATA_TYPE_UINT32_ABCD) ?
-                ((uint32_t)raw_data[0] << 16) | raw_data[1] :
-                ((uint32_t)raw_data[1] << 16) | raw_data[0];
+            node->value.uint32_val = (uint32_t)((data[1] << 16) | data[0]);
             break;
-
         case DATA_TYPE_FLOAT_ABCD:
-        case DATA_TYPE_FLOAT_CDAB: {
-            uint32_t temp = (node->data_type == DATA_TYPE_FLOAT_ABCD) ?
-                ((uint32_t)raw_data[0] << 16) | raw_data[1] :
-                ((uint32_t)raw_data[1] << 16) | raw_data[0];
-            memcpy(&node->value.float_val, &temp, sizeof(float));
+            memcpy(&node->value.float_val, data, sizeof(float));
             break;
-        }
-
-        case DATA_TYPE_DOUBLE: {
-            uint64_t temp = ((uint64_t)raw_data[0] << 48) |
-                           ((uint64_t)raw_data[1] << 32) |
-                           ((uint64_t)raw_data[2] << 16) |
-                           raw_data[3];
-            memcpy(&node->value.double_val, &temp, sizeof(double));
+        case DATA_TYPE_FLOAT_CDAB:
+            {
+                uint16_t temp[2] = {data[1], data[0]};
+                memcpy(&node->value.float_val, temp, sizeof(float));
+            }
             break;
-        }
-
+        case DATA_TYPE_DOUBLE:
+            {
+                uint16_t temp[4] = {data[0], data[1], data[2], data[3]};
+                memcpy(&node->value.double_val, temp, sizeof(double));
+            }
+            break;
         default:
+            DBG_ERROR("Unsupported data type: %d", node->data_type);
             return RTU_MASTER_INVALID;
     }
-    
+
+    // Apply formula if exists
+    if (node->formula && g_formula_vars) {
+        // Compile and evaluate formula
+        te_expr *expr = te_compile(node->formula, g_formula_vars, 0, 0);
+        if (expr) {
+            double result = te_eval(expr);
+            te_free(expr);
+
+            // Store the result back in the appropriate value field
+            switch (node->data_type) {
+                case DATA_TYPE_BOOLEAN:
+                    node->value.bool_val = (result != 0);
+                    break;
+                case DATA_TYPE_INT8:
+                    node->value.int8_val = (int8_t)result;
+                    break;
+                case DATA_TYPE_UINT8:
+                    node->value.uint8_val = (uint8_t)result;
+                    break;
+                case DATA_TYPE_INT16:
+                    node->value.int16_val = (int16_t)result;
+                    break;
+                case DATA_TYPE_UINT16:
+                    node->value.uint16_val = (uint16_t)result;
+                    break;
+                case DATA_TYPE_INT32_ABCD:
+                case DATA_TYPE_INT32_CDAB:
+                    node->value.int32_val = (int32_t)result;
+                    break;
+                case DATA_TYPE_UINT32_ABCD:
+                case DATA_TYPE_UINT32_CDAB:
+                    node->value.uint32_val = (uint32_t)result;
+                    break;
+                case DATA_TYPE_FLOAT_ABCD:
+                case DATA_TYPE_FLOAT_CDAB:
+                    node->value.float_val = (float)result;
+                    break;
+                case DATA_TYPE_DOUBLE:
+                    node->value.double_val = result;
+                    break;
+            }
+            DBG_INFO("Applied formula '%s' to node %s, result: %f", 
+                     node->formula, node->name, result);
+        } else {
+            DBG_ERROR("Failed to compile formula '%s' for node %s", 
+                     node->formula, node->name);
+        }
+    }
+
+    // Check if reporting is enabled and compare values
+    if (node->enable_reporting) {
+        bool should_report = false;
+        double abs_diff = 0.0;
+
+        // Calculate absolute difference based on data type
+        switch (node->data_type) {
+            case DATA_TYPE_BOOLEAN:
+                should_report = node->value.bool_val != node->previous_value.bool_val;
+                break;
+            case DATA_TYPE_INT8:
+                abs_diff = fabs((double)(node->value.int8_val - node->previous_value.int8_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_UINT8:
+                abs_diff = fabs((double)(node->value.uint8_val - node->previous_value.uint8_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_INT16:
+                abs_diff = fabs((double)(node->value.int16_val - node->previous_value.int16_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_UINT16:
+                abs_diff = fabs((double)(node->value.uint16_val - node->previous_value.uint16_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_INT32_ABCD:
+            case DATA_TYPE_INT32_CDAB:
+                abs_diff = fabs((double)(node->value.int32_val - node->previous_value.int32_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_UINT32_ABCD:
+            case DATA_TYPE_UINT32_CDAB:
+                abs_diff = fabs((double)(node->value.uint32_val - node->previous_value.uint32_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_FLOAT_ABCD:
+            case DATA_TYPE_FLOAT_CDAB:
+                abs_diff = fabs((double)(node->value.float_val - node->previous_value.float_val));
+                should_report = abs_diff >= node->variation_range;
+                break;
+            case DATA_TYPE_DOUBLE:
+                abs_diff = fabs(node->value.double_val - node->previous_value.double_val);
+                should_report = abs_diff >= node->variation_range;
+                break;
+        }
+
+        // If value change exceeds variation range, send report event
+        // if (should_report) {
+        //     // Create report event
+        //     report_event_t event = {
+        //         .node_name = node->name,
+        //         .data_type = node->data_type,
+        //         .value = node->value,
+        //         .previous_value = node->previous_value,
+        //         .timestamp = get_current_time_ms()
+        //     };
+
+        //     // Send event to report thread
+        //     if (send_report_event(&event) != 0) {
+        //         DBG_ERROR("Failed to send report event for node %s", node->name);
+        //     } else {
+        //         DBG_INFO("Sent report event for node %s (diff: %.2f)", node->name, abs_diff);
+        //     }
+        // }
+    }
+
     return RTU_MASTER_OK;
 }
 
@@ -575,6 +844,177 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *current_device) {
     }
 }
 
+// Process virtual registers (port 4) - calculate formula values without polling
+static void process_virtual_registers(device_t *device) {
+    if (!device) {
+        DBG_ERROR("Invalid device for virtual register processing");
+        return;
+    }
+
+    DBG_INFO("Processing virtual registers for device: %s", device->name);
+    
+    node_t *current_node = device->nodes;
+    while (current_node) {
+        if (current_node->formula && g_formula_vars) {
+            // Store previous value before updating
+            current_node->previous_value = current_node->value;
+            
+            // Compile and evaluate formula
+            te_expr *expr = te_compile(current_node->formula, g_formula_vars, 0, 0);
+            if (expr) {
+                double result = te_eval(expr);
+                te_free(expr);
+
+                // Store the result in the appropriate value field
+                switch (current_node->data_type) {
+                    case DATA_TYPE_BOOLEAN:
+                        current_node->value.bool_val = (result != 0);
+                        break;
+                    case DATA_TYPE_INT8:
+                        current_node->value.int8_val = (int8_t)result;
+                        break;
+                    case DATA_TYPE_UINT8:
+                        current_node->value.uint8_val = (uint8_t)result;
+                        break;
+                    case DATA_TYPE_INT16:
+                        current_node->value.int16_val = (int16_t)result;
+                        break;
+                    case DATA_TYPE_UINT16:
+                        current_node->value.uint16_val = (uint16_t)result;
+                        break;
+                    case DATA_TYPE_INT32_ABCD:
+                    case DATA_TYPE_INT32_CDAB:
+                        current_node->value.int32_val = (int32_t)result;
+                        break;
+                    case DATA_TYPE_UINT32_ABCD:
+                    case DATA_TYPE_UINT32_CDAB:
+                        current_node->value.uint32_val = (uint32_t)result;
+                        break;
+                    case DATA_TYPE_FLOAT_ABCD:
+                    case DATA_TYPE_FLOAT_CDAB:
+                        current_node->value.float_val = (float)result;
+                        break;
+                    case DATA_TYPE_DOUBLE:
+                        current_node->value.double_val = result;
+                        break;
+                }
+
+                // Check if reporting is enabled and compare values
+                if (current_node->enable_reporting) {
+                    bool should_report = false;
+                    double abs_diff = 0.0;
+
+                    // Calculate absolute difference based on data type
+                    switch (current_node->data_type) {
+                        case DATA_TYPE_BOOLEAN:
+                            should_report = current_node->value.bool_val != current_node->previous_value.bool_val;
+                            break;
+                        case DATA_TYPE_INT8:
+                            abs_diff = fabs((double)(current_node->value.int8_val - current_node->previous_value.int8_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_UINT8:
+                            abs_diff = fabs((double)(current_node->value.uint8_val - current_node->previous_value.uint8_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_INT16:
+                            abs_diff = fabs((double)(current_node->value.int16_val - current_node->previous_value.int16_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_UINT16:
+                            abs_diff = fabs((double)(current_node->value.uint16_val - current_node->previous_value.uint16_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_INT32_ABCD:
+                        case DATA_TYPE_INT32_CDAB:
+                            abs_diff = fabs((double)(current_node->value.int32_val - current_node->previous_value.int32_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_UINT32_ABCD:
+                        case DATA_TYPE_UINT32_CDAB:
+                            abs_diff = fabs((double)(current_node->value.uint32_val - current_node->previous_value.uint32_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_FLOAT_ABCD:
+                        case DATA_TYPE_FLOAT_CDAB:
+                            abs_diff = fabs((double)(current_node->value.float_val - current_node->previous_value.float_val));
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                        case DATA_TYPE_DOUBLE:
+                            abs_diff = fabs(current_node->value.double_val - current_node->previous_value.double_val);
+                            should_report = abs_diff >= current_node->variation_range;
+                            break;
+                    }
+
+                    // If value change exceeds variation range, send report event
+                    // if (should_report) {
+                    //     report_event_t event = {
+                    //         .node_name = current_node->name,
+                    //         .data_type = current_node->data_type,
+                    //         .value = current_node->value,
+                    //         .previous_value = current_node->previous_value,
+                    //         .timestamp = get_current_time_ms()
+                    //     };
+
+                    //     if (send_report_event(&event) != 0) {
+                    //         DBG_ERROR("Failed to send report event for virtual node %s", current_node->name);
+                    //     } else {
+                    //         DBG_INFO("Sent report event for virtual node %s (diff: %.2f)", current_node->name, abs_diff);
+                    //     }
+                    // }
+                }
+
+                // Log the calculated value
+                switch (current_node->data_type) {
+                    case DATA_TYPE_BOOLEAN:
+                        DBG_INFO("Virtual node %s.%s = %d", device->name, current_node->name, current_node->value.bool_val);
+                        break;
+                    case DATA_TYPE_INT8:
+                        DBG_INFO("Virtual node %s.%s = %d", device->name, current_node->name, current_node->value.int8_val);
+                        break;
+                    case DATA_TYPE_UINT8:
+                        DBG_INFO("Virtual node %s.%s = %u", device->name, current_node->name, current_node->value.uint8_val);
+                        break;
+                    case DATA_TYPE_INT16:
+                        DBG_INFO("Virtual node %s.%s = %d", device->name, current_node->name, current_node->value.int16_val);
+                        break;
+                    case DATA_TYPE_UINT16:
+                        DBG_INFO("Virtual node %s.%s = %u", device->name, current_node->name, current_node->value.uint16_val);
+                        break;
+                    case DATA_TYPE_INT32_ABCD:
+                    case DATA_TYPE_INT32_CDAB:
+                        DBG_INFO("Virtual node %s.%s = %ld", device->name, current_node->name, current_node->value.int32_val);
+                        break;
+                    case DATA_TYPE_UINT32_ABCD:
+                    case DATA_TYPE_UINT32_CDAB:
+                        DBG_INFO("Virtual node %s.%s = %lu", device->name, current_node->name, current_node->value.uint32_val);
+                        break;
+                    case DATA_TYPE_FLOAT_ABCD:
+                    case DATA_TYPE_FLOAT_CDAB:
+                        DBG_INFO("Virtual node %s.%s = %.6f", device->name, current_node->name, current_node->value.float_val);
+                        break;
+                    case DATA_TYPE_DOUBLE:
+                        DBG_INFO("Virtual node %s.%s = %.12lf", device->name, current_node->name, current_node->value.double_val);
+                        break;
+                }
+
+                // Send websocket update
+                char *json_msg = build_node_json(current_node->name, current_node);
+                if (json_msg) {
+                    send_websocket_message(json_msg);
+                    free(json_msg);
+                }
+            } else {
+                DBG_ERROR("Failed to compile formula '%s' for virtual node %s", 
+                         current_node->formula, current_node->name);
+            }
+        }
+        // Sleep for the device's polling interval
+        usleep(device->polling_interval * 1000);
+        current_node = current_node->next;
+    }
+}
+
 static void *rtu_master_thread(void *arg) {
     uint8_t master_send_buf[MODBUS_MAX_ADU_LENGTH];
     uint8_t master_recv_buf[MODBUS_MAX_ADU_LENGTH];
@@ -591,6 +1031,12 @@ static void *rtu_master_thread(void *arg) {
         goto exit;
     }
 
+    // Initialize formula variables array
+    if (init_formula_vars() != 0) {
+        DBG_ERROR("Failed to initialize formula variables");
+        goto exit;
+    }
+
     DBG_INFO("RTU master polling thread started");
     method_ws_log = management_get_log_method();
 
@@ -599,7 +1045,7 @@ static void *rtu_master_thread(void *arg) {
         device_t *current_device = device_config;
         while (current_device) {
             // Initialize appropriate context based on port
-            if (current_device->port <= 1) {
+            if (current_device->port < 2) {
                 // RTU mode for ports 0 and 1
                 if (!ctx || ctx != &ctx_rtu._ctx) {
                     agile_modbus_rtu_init(&ctx_rtu, master_send_buf, sizeof(master_send_buf),
@@ -610,7 +1056,7 @@ static void *rtu_master_thread(void *arg) {
                     serial_fd = serial_open(current_device->port);  
                     if (serial_fd < 0) {
                         DBG_ERROR("Failed to open serial port %d", current_device->port);
-                    current_device = current_device->next;
+                        current_device = current_device->next;
                         continue;
                     }
                 }
@@ -618,8 +1064,8 @@ static void *rtu_master_thread(void *arg) {
                 rtu_master_poll(ctx, serial_fd, current_device);
                 serial_close(serial_fd);
                 serial_fd = -1;
-            } else if (current_device->port == 3) {
-                // TCP mode for port 3
+            } else if (current_device->port == 2) {
+                // TCP mode for port 2
                 if (!ctx || ctx != &ctx_tcp._ctx) {
                     agile_modbus_tcp_init(&ctx_tcp, master_send_buf, sizeof(master_send_buf),
                                         master_recv_buf, sizeof(master_recv_buf));
@@ -640,7 +1086,10 @@ static void *rtu_master_thread(void *arg) {
                 rtu_master_poll(ctx, tcp_fd, current_device);
                 tcp_close(tcp_fd);
                 tcp_fd = -1;
-            } else {
+            } else if (current_device->port == 4) {
+                // Virtual register mode - calculate formula values without polling
+                process_virtual_registers(current_device);
+        } else {
                 DBG_ERROR("Invalid port number: %d", current_device->port);
             }
 
@@ -660,6 +1109,9 @@ exit:
     if (tcp_fd >= 0) {
         close(tcp_fd);
     }
+
+    // Free formula variables array
+    free_formula_vars();
 
     return NULL;
 }

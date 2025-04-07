@@ -545,6 +545,91 @@ static void handle_report_set(struct mg_connection *c, struct mg_http_message *h
     }
 }
 
+// Upload MQTT server CA
+static void handle_upload_mqtt_server_ca(struct mg_connection *c, struct mg_http_message *hm) {
+    struct mg_http_part part;
+    size_t ofs = 0;
+    while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) {
+        DBG_INFO("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
+                 (int) part.name.len, part.name.buf, (int) part.filename.len,
+                 part.filename.buf, (unsigned long) part.body.len);
+        // DBG_INFO("Chunk body: %.*s", (int) part.body.len, part.body.buf);
+    }   
+
+    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+}
+
+// Upload MQTT client certificate
+static void handle_upload_mqtt_client_certificate(struct mg_connection *c, struct mg_http_message *hm) {
+    struct mg_http_part part;
+    size_t ofs = 0;
+    while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) {
+        DBG_INFO("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
+                 (int) part.name.len, part.name.buf, (int) part.filename.len,
+                 part.filename.buf, (unsigned long) part.body.len);
+        // DBG_INFO("Chunk body: %.*s", (int) part.body.len, part.body.buf);
+    }
+
+    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+}
+
+// Upload MQTT client private key
+static void handle_upload_mqtt_client_private_key(struct mg_connection *c, struct mg_http_message *hm) {
+    struct mg_http_part part;
+    size_t ofs = 0;
+    while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) {
+        DBG_INFO("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
+                 (int) part.name.len, part.name.buf, (int) part.filename.len,
+                 part.filename.buf, (unsigned long) part.body.len);
+        // DBG_INFO("Chunk body: %.*s", (int) part.body.len, part.body.buf);
+    }
+
+    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+}
+
+static void handle_upload_mqtt(struct mg_connection *c, struct mg_http_message *hm) {
+    struct mg_http_part part;
+    size_t ofs = 0;
+    while ((ofs = mg_http_next_multipart(hm->body, ofs, &part)) > 0) {
+        DBG_INFO("Chunk name: [%.*s] filename: [%.*s] length: %lu bytes",
+                 (int) part.name.len, part.name.buf, (int) part.filename.len,
+                 part.filename.buf, (unsigned long) part.body.len);
+        // DBG_INFO("Chunk body: %.*s", (int) part.body.len, part.body.buf);
+    }
+
+    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+}
+
+static void handle_edge_get(struct mg_connection *c) {
+    char config_str[1024] = {0};
+    int read_len = db_read("edge_config", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read edge config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+static void handle_edge_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    int result = db_write("edge_config", (void*)json_str, strlen(json_str) + 1);
+    free(json_str);
+
+    if (result == 0) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply edge configuration\"}");
+    }
+}
+
 // Function to send message to all connected websocket clients
 void send_websocket_message(const char *message) {
     if (!message || !ws_conn) return;
@@ -583,6 +668,12 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         }
         else if (mg_match(hm->uri, mg_str("/api/devices/set"), NULL)) {
             handle_devices_set(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/edge/get"), NULL)) {
+            handle_edge_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/edge/set"), NULL)) {
+            handle_edge_set(c, hm);
         }
         else if (mg_match(hm->uri, mg_str("/api/home/get"), NULL)) {
             handle_card_get(c);
@@ -650,11 +741,26 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         else if (mg_match(hm->uri, mg_str("/api/report/set"), NULL)) {
             handle_report_set(c, hm);
         }
+        else if (mg_match(hm->uri, mg_str("/api/upload/mqtt/*"), NULL)) {
+            handle_upload_mqtt(c, hm);
+        }
+        // else if (mg_match(hm->uri, mg_str("/api/upload/mqtt/serverCA"), NULL)) {
+        //     handle_upload_mqtt_server_ca(c, hm);
+        // }
+        // else if (mg_match(hm->uri, mg_str("/api/upload/mqtt/clientCertificate"), NULL)) {
+        //     handle_upload_mqtt_client_certificate(c, hm);
+        // }
+        // else if (mg_match(hm->uri, mg_str("/api/upload/mqtt/clientPrivateKey"), NULL)) {
+        //     handle_upload_mqtt_client_private_key(c, hm);
+        // }
         else {
-            struct mg_http_serve_opts opts;
-            memset(&opts, 0, sizeof(opts));
-            opts.root_dir = "/web_root";
-            opts.fs = &mg_fs_packed;
+            // struct mg_http_serve_opts opts;
+            // memset(&opts, 0, sizeof(opts));
+            // opts.root_dir = "/web_root";
+            // opts.fs = &mg_fs_packed;
+            // mg_http_serve_dir(c, ev_data, &opts);
+
+            struct mg_http_serve_opts opts = {.root_dir = "web_root"};
             mg_http_serve_dir(c, ev_data, &opts);
         }
     }

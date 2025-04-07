@@ -41,12 +41,12 @@ static bool parse_mqtt_config(const char *json_str) {
 
     cJSON *client_id = cJSON_GetObjectItem(root, "clientId");
     if (client_id && client_id->valuestring) {
-        strncpy(g_mqtt_config.client_id, client_id->valuestring, sizeof(g_mqtt_config.client_id) - 1);
+        strncpy(g_mqtt_config.client_id, client_id->valuestring, sizeof(g_mqtt_config.client_id)-1);
     }
 
     cJSON *server_address = cJSON_GetObjectItem(root, "serverAddress");
     if (server_address && server_address->valuestring) {
-        strncpy(g_mqtt_config.server_address, server_address->valuestring, sizeof(g_mqtt_config.server_address) - 1);
+        strncpy(g_mqtt_config.server_address, server_address->valuestring, sizeof(g_mqtt_config.server_address)-1);
     }
 
     cJSON *port = cJSON_GetObjectItem(root, "port");
@@ -81,12 +81,12 @@ static bool parse_mqtt_config(const char *json_str) {
 
     cJSON *username = cJSON_GetObjectItem(root, "username");
     if (username && username->valuestring) {
-        strncpy(g_mqtt_config.username, username->valuestring, sizeof(g_mqtt_config.username) - 1);
+        strncpy(g_mqtt_config.username, username->valuestring, sizeof(g_mqtt_config.username)-1);
     }
 
     cJSON *password = cJSON_GetObjectItem(root, "password");
     if (password && password->valuestring) {
-        strncpy(g_mqtt_config.password, password->valuestring, sizeof(g_mqtt_config.password) - 1);
+        strncpy(g_mqtt_config.password, password->valuestring, sizeof(g_mqtt_config.password)-1);
     }
 
     cJSON *enable_last_will = cJSON_GetObjectItem(root, "enableLastWill");
@@ -96,12 +96,12 @@ static bool parse_mqtt_config(const char *json_str) {
 
     cJSON *last_will_topic = cJSON_GetObjectItem(root, "lastWillTopic");
     if (last_will_topic && last_will_topic->valuestring) {
-        strncpy(g_mqtt_config.last_will_topic, last_will_topic->valuestring, sizeof(g_mqtt_config.last_will_topic) - 1);
+        strncpy(g_mqtt_config.last_will_topic, last_will_topic->valuestring, sizeof(g_mqtt_config.last_will_topic)-1);
     }
     
     cJSON *last_will_message = cJSON_GetObjectItem(root, "lastWillMessage");
     if (last_will_message && last_will_message->valuestring) {
-        strncpy(g_mqtt_config.last_will_message, last_will_message->valuestring, sizeof(g_mqtt_config.last_will_message) - 1);
+        strncpy(g_mqtt_config.last_will_message, last_will_message->valuestring, sizeof(g_mqtt_config.last_will_message)-1);
     }
 
     cJSON *last_will_qos = cJSON_GetObjectItem(root, "lastWillQos");
@@ -164,12 +164,12 @@ static bool parse_pub_topic(cJSON *topic_obj, mqtt_pub_topic_t *topic) {
 
     cJSON *topic_string = cJSON_GetObjectItem(topic_obj, "topicString");
     if (topic_string && topic_string->valuestring) {
-        strncpy(topic->topic_string, topic_string->valuestring, sizeof(topic->topic_string) - 1);
+        strncpy(topic->topic_string, topic_string->valuestring, sizeof(topic->topic_string)-1);
     }
 
     cJSON *topic_alias = cJSON_GetObjectItem(topic_obj, "topicAlias");
     if (topic_alias && topic_alias->valuestring) {
-        strncpy(topic->topic_alias, topic_alias->valuestring, sizeof(topic->topic_alias) - 1);
+        strncpy(topic->topic_alias, topic_alias->valuestring, sizeof(topic->topic_alias)-1);
     }
 
     cJSON *binding_ports = cJSON_GetObjectItem(topic_obj, "bindingPorts");
@@ -213,12 +213,12 @@ static bool parse_sub_topic(cJSON *topic_obj, mqtt_sub_topic_t *topic) {
 
     cJSON *topic_string = cJSON_GetObjectItem(topic_obj, "topicString");
     if (topic_string && topic_string->valuestring) {
-        strncpy(topic->topic_string, topic_string->valuestring, sizeof(topic->topic_string) - 1);
+        strncpy(topic->topic_string, topic_string->valuestring, sizeof(topic->topic_string)-1);
     }
 
     cJSON *delimiter = cJSON_GetObjectItem(topic_obj, "delimiter");
     if (delimiter && delimiter->valuestring) {
-        strncpy(topic->delimiter, delimiter->valuestring, sizeof(topic->delimiter) - 1);
+        strncpy(topic->delimiter, delimiter->valuestring, sizeof(topic->delimiter)-1);
     }
 
     cJSON *binding_ports = cJSON_GetObjectItem(topic_obj, "bindingPorts");

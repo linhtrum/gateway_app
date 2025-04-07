@@ -7,6 +7,7 @@ INCLUDE = -I./packages/mongoose \
 		-I./packages/FlashDB/inc \
 		-I./packages/agile_modbus/inc \
 		-I./packages/agile_modbus/util \
+		-I./packages/tinyexpr \
 		-I./application/database \
 		-I./application/log \
 		-I./application/modbus \
@@ -14,14 +15,13 @@ INCLUDE = -I./packages/mongoose \
 		-I./application/event \
 		-I./application/network \
 		-I./application/mqtt \
-		-DMG_ENABLE_PACKED_FS=1
 
-LIB = -lpthread -lrt -lpaho-mqtt3a
+LIB = -lpthread -lrt -lpaho-mqtt3a -lm
 
 TARGET = app
+
 SRCS = application/main.c \
        application/web_server/net.c \
-       application/web_server/packed_fs.c \
        packages/mongoose/mongoose.c \
        packages/cJSON/cJSON.c \
        packages/FlashDB/src/fdb_kvdb.c \
@@ -37,6 +37,7 @@ SRCS = application/main.c \
 		packages/agile_modbus/src/agile_modbus_rtu.c \
 		packages/agile_modbus/src/agile_modbus_tcp.c \
 		packages/agile_modbus/util/agile_modbus_slave_util.c \
+		packages/tinyexpr/tinyexpr.c \
 		application/log/log_buffer.c \
 		application/log/log_output.c \
 		application/system/system.c \
@@ -47,15 +48,14 @@ SRCS = application/main.c \
 		application/system/management.c \
 		application/mqtt/mqtt.c \
 		application/mqtt/mqtt_handle.c \
-		application/modbus/tcp.c
-		
+		application/modbus/tcp.c \
+
 OBJS = $(SRCS:.c=.o)
 
 run: clean all
 
 all: $(TARGET)
 	mv $(TARGET) out
-#	scp -r out root@192.168.1.6:/root/home/test
 	./out/$(TARGET)
 
 $(TARGET): $(OBJS)

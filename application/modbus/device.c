@@ -76,14 +76,14 @@ static node_t* parse_nodes(cJSON *nodes_array) {
 
         cJSON *name = cJSON_GetObjectItem(node_obj, "n");
         cJSON *addr = cJSON_GetObjectItem(node_obj, "a");
-        cJSON *func = cJSON_GetObjectItem(node_obj, "f");
+        cJSON *func = cJSON_GetObjectItem(node_obj, "fc");
         cJSON *data_type = cJSON_GetObjectItem(node_obj, "dt");
         cJSON *timeout = cJSON_GetObjectItem(node_obj, "t");
         cJSON *enable_report = cJSON_GetObjectItem(node_obj, "er");
         cJSON *var_range = cJSON_GetObjectItem(node_obj, "vr");
         cJSON *enable_map = cJSON_GetObjectItem(node_obj, "em");
         cJSON *mapped_addr = cJSON_GetObjectItem(node_obj, "ma");
-        cJSON *formula = cJSON_GetObjectItem(node_obj, "f");
+        cJSON *formula = cJSON_GetObjectItem(node_obj, "fo");
 
         if (name && name->valuestring) {
             new_node->name = strdup(name->valuestring);

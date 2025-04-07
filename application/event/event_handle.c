@@ -30,10 +30,10 @@ static bool check_event_trigger(event_data_t *event, float node_value) {
     if (!event || !event->enabled) return false;
 
     // Check if enough time has passed since last trigger
-    time_t current_time = time(NULL);
-    if (current_time - event->last_trigger < event->min_interval) {
-        return false;
-    }
+    // time_t current_time = time(NULL);
+    // if (current_time - event->last_trigger < event->min_interval) {
+    //     return false;
+    // }
 
     bool trigger = false;
     switch (event->condition) {
@@ -70,7 +70,7 @@ static bool check_event_trigger(event_data_t *event, float node_value) {
     // Handle state change
     if (trigger != event->is_triggered) {
         event->is_triggered = trigger;
-        event->last_trigger = current_time;
+        // event->last_trigger = current_time;
         event->last_value = node_value;
         return true;
     }
@@ -194,7 +194,7 @@ static void* event_thread_function(void *arg) {
                 }
             }
         }
-        usleep(10000); // Sleep for 10ms
+        usleep(5000); // Sleep for 5ms
     }
 
     return NULL;
