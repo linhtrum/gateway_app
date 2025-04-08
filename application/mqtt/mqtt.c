@@ -114,7 +114,33 @@ static bool parse_mqtt_config(const char *json_str) {
         g_mqtt_config.last_will_retained = cJSON_IsTrue(last_will_retained);
     }
 
+    cJSON *ssl_protocol = cJSON_GetObjectItem(root, "sslProtocol");
+    if (ssl_protocol) {
+        g_mqtt_config.ssl_protocol = ssl_protocol->valueint;
+    }
+
+    cJSON *ssl_verify = cJSON_GetObjectItem(root, "sslVerify");
+    if (ssl_verify) {
+        g_mqtt_config.ssl_verify = ssl_verify->valueint;
+    }
+
+    cJSON *ssl_ca_cert = cJSON_GetObjectItem(root, "serverCA");
+    if (ssl_ca_cert && ssl_ca_cert->valuestring) {
+        strncpy(g_mqtt_config.ssl_ca_cert, ssl_ca_cert->valuestring, sizeof(g_mqtt_config.ssl_ca_cert)-1);
+    }
+
+    cJSON *ssl_client_cert = cJSON_GetObjectItem(root, "clientCertificate");
+    if (ssl_client_cert && ssl_client_cert->valuestring) {
+        strncpy(g_mqtt_config.ssl_client_cert, ssl_client_cert->valuestring, sizeof(g_mqtt_config.ssl_client_cert)-1);
+    }
+
+    cJSON *ssl_client_key = cJSON_GetObjectItem(root, "clientPrivateKey");
+    if (ssl_client_key && ssl_client_key->valuestring) {
+        strncpy(g_mqtt_config.ssl_client_key, ssl_client_key->valuestring, sizeof(g_mqtt_config.ssl_client_key)-1);
+    }
+
     cJSON_Delete(root);
+
     return true;
 }
 
@@ -152,42 +178,42 @@ static bool parse_pub_topic(cJSON *topic_obj, mqtt_pub_topic_t *topic) {
         return false;
     }
 
-    cJSON *enabled = cJSON_GetObjectItem(topic_obj, "enabled");
+    cJSON *enabled = cJSON_GetObjectItem(topic_obj, "pen");
     if (enabled) {
         topic->enabled = cJSON_IsTrue(enabled);
     }
 
-    cJSON *transmission_mode = cJSON_GetObjectItem(topic_obj, "transmissionMode");
+    cJSON *transmission_mode = cJSON_GetObjectItem(topic_obj, "ptm");
     if (transmission_mode) {
         topic->transmission_mode = transmission_mode->valueint;
     }
 
-    cJSON *topic_string = cJSON_GetObjectItem(topic_obj, "topicString");
+    cJSON *topic_string = cJSON_GetObjectItem(topic_obj, "pts");
     if (topic_string && topic_string->valuestring) {
         strncpy(topic->topic_string, topic_string->valuestring, sizeof(topic->topic_string)-1);
     }
 
-    cJSON *topic_alias = cJSON_GetObjectItem(topic_obj, "topicAlias");
+    cJSON *topic_alias = cJSON_GetObjectItem(topic_obj, "pta");
     if (topic_alias && topic_alias->valuestring) {
         strncpy(topic->topic_alias, topic_alias->valuestring, sizeof(topic->topic_alias)-1);
     }
 
-    cJSON *binding_ports = cJSON_GetObjectItem(topic_obj, "bindingPorts");
+    cJSON *binding_ports = cJSON_GetObjectItem(topic_obj, "pbp");
     if (binding_ports) {
         topic->binding_ports = binding_ports->valueint;
     }
 
-    cJSON *qos = cJSON_GetObjectItem(topic_obj, "qos");
+    cJSON *qos = cJSON_GetObjectItem(topic_obj, "pqos");
     if (qos) {
         topic->qos = qos->valueint;
     }
 
-    cJSON *retained_message = cJSON_GetObjectItem(topic_obj, "retainedMessage");
+    cJSON *retained_message = cJSON_GetObjectItem(topic_obj, "prm");
     if (retained_message) {
         topic->retained_message = cJSON_IsTrue(retained_message);
     }
 
-    cJSON *io_control_query = cJSON_GetObjectItem(topic_obj, "ioControlQuery");
+    cJSON *io_control_query = cJSON_GetObjectItem(topic_obj, "pio");
     if (io_control_query) {
         topic->io_control_query = cJSON_IsTrue(io_control_query);
     }
@@ -201,37 +227,37 @@ static bool parse_sub_topic(cJSON *topic_obj, mqtt_sub_topic_t *topic) {
         return false;
     }
 
-    cJSON *enabled = cJSON_GetObjectItem(topic_obj, "enabled");
+    cJSON *enabled = cJSON_GetObjectItem(topic_obj, "sen");
     if (enabled) {
         topic->enabled = cJSON_IsTrue(enabled);
     }
 
-    cJSON *transmission_mode = cJSON_GetObjectItem(topic_obj, "transmissionMode");
+    cJSON *transmission_mode = cJSON_GetObjectItem(topic_obj, "stm");
     if (transmission_mode) {
         topic->transmission_mode = transmission_mode->valueint;
     }
 
-    cJSON *topic_string = cJSON_GetObjectItem(topic_obj, "topicString");
+    cJSON *topic_string = cJSON_GetObjectItem(topic_obj, "sts");
     if (topic_string && topic_string->valuestring) {
         strncpy(topic->topic_string, topic_string->valuestring, sizeof(topic->topic_string)-1);
     }
 
-    cJSON *delimiter = cJSON_GetObjectItem(topic_obj, "delimiter");
+    cJSON *delimiter = cJSON_GetObjectItem(topic_obj, "sd");
     if (delimiter && delimiter->valuestring) {
         strncpy(topic->delimiter, delimiter->valuestring, sizeof(topic->delimiter)-1);
     }
 
-    cJSON *binding_ports = cJSON_GetObjectItem(topic_obj, "bindingPorts");
+    cJSON *binding_ports = cJSON_GetObjectItem(topic_obj, "sbp");
     if (binding_ports) {
         topic->binding_ports = binding_ports->valueint;
     }
 
-    cJSON *qos = cJSON_GetObjectItem(topic_obj, "qos");
+    cJSON *qos = cJSON_GetObjectItem(topic_obj, "sqos");
     if (qos) {
         topic->qos = qos->valueint;
     }
 
-    cJSON *io_control_query = cJSON_GetObjectItem(topic_obj, "ioControlQuery");
+    cJSON *io_control_query = cJSON_GetObjectItem(topic_obj, "sio");
     if (io_control_query) {
         topic->io_control_query = cJSON_IsTrue(io_control_query);
     }

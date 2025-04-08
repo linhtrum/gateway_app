@@ -92,7 +92,7 @@ static node_t* parse_nodes(cJSON *nodes_array) {
             new_node->address = addr->valueint;
         }
         if (func) {
-            new_node->function = func->valueint;
+            new_node->function = (function_code_t)func->valueint;
         }
         if (data_type) {
             new_node->data_type = (data_type_t)data_type->valueint;
@@ -308,7 +308,7 @@ device_t* load_device_config(void) {
             new_device->group_mode = false;  // Default to basic polling mode
         }
         if (port) {
-            new_device->port = port->valueint;
+            new_device->port = (port_type_t)port->valueint;
         }
         if (protocol) {
             new_device->protocol = (protocol_t)protocol->valueint;

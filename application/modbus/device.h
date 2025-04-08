@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "serial.h"
 
 #define MODBUS_RTU_TIMEOUT 1000
 #define MODBUS_POLLING_INTERVAL 1000
@@ -12,11 +13,27 @@
 #define MAX_SLAVE_ADDRESS 247
 #define MAX_FORMULA_LENGTH 256
 
+// Port type enumeration
+typedef enum {
+    PORT_SERIAL_1 = 0,
+    PORT_SERIAL_2 = 1,
+    PORT_ETHERNET = 2,
+    PORT_IO = 3,
+    PORT_VIRTUAL = 4
+} port_type_t;
+
 // Protocol enumeration
 typedef enum {
     PROTOCOL_MODBUS = 0,
     PROTOCOL_DLT645 = 1
 } protocol_t;
+
+typedef enum {
+    FUNCTION_CODE_READ_COILS = 1,
+    FUNCTION_CODE_READ_DISCRETE_INPUTS = 2,
+    FUNCTION_CODE_READ_HOLDING_REGISTERS = 3,
+    FUNCTION_CODE_READ_INPUT_REGISTERS = 4,
+} function_code_t;
 
 // Data type enumeration
 typedef enum {
@@ -51,7 +68,7 @@ typedef union {
 typedef struct node {
     char *name;                          // Node name
     uint16_t address;                    // Modbus address
-    uint8_t function;                    // Modbus function code
+    function_code_t function;            // Modbus function code
     data_type_t data_type;               // Data type (boolean, int8, uint8, int16, uint16, int32, uint32, float, double)
     uint32_t timeout;                    // Timeout in milliseconds for serial read
     node_value_t value;                  // Store the converted value (present value)
@@ -69,7 +86,7 @@ typedef struct node {
 
 // Structure for merged nodes with same function code
 typedef struct node_group {
-    uint8_t function;           // Function code for this group
+    function_code_t function;   // Function code for this group
     uint16_t start_address;     // Starting address of the merged range
     uint16_t register_count;    // Total number of registers to read
     node_t *nodes;             // Linked list of nodes in this group
@@ -83,15 +100,18 @@ typedef struct device {
     uint8_t device_addr;          // Device address
     uint32_t polling_interval;    // Polling interval in milliseconds
     bool group_mode;              // True for group polling, false for basic polling
-    uint8_t port;                  // Serial port number (1-4)
+    port_type_t port;             // Serial port number (1-4)
     protocol_t protocol;          // Protocol type (RTU/TCP)
     char *server_address;         // Server address for TCP
-    uint16_t server_port;      // Server port for TCP (255-65535)
-    bool enable_mapping;       // Enable address mapping
-    uint8_t mapped_slave_addr; // Mapped slave address (1-247)
-    node_t *nodes;             // Original list of nodes
-    node_group_t *groups;      // List of merged node groups (used when group_mode is true)
-    struct device *next;
+    uint16_t server_port;         // Server port for TCP (255-65535)
+    bool enable_mapping;          // Enable address mapping
+    uint8_t mapped_slave_addr;    // Mapped slave address (1-247)
+    node_t *nodes;               // Original list of nodes
+    node_group_t *groups;        // List of merged node groups (used when group_mode is true)
+    struct device *next;         // Next device in the list
+    int fd;                      // File descriptor for the serial port
+    // Serial port configuration
+    serial_config_t* serial;     // Serial port configuration for this device
 } device_t;
 
 // Function declarations

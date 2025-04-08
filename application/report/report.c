@@ -31,7 +31,7 @@ static bool parse_report_config(const char *json_str) {
 
     cJSON *channel = cJSON_GetObjectItem(root, "channel");
     if (channel) {
-        g_report_config.channel = channel->valueint;
+        g_report_config.channel = (report_channel_type_t)channel->valueint;
     }
 
     cJSON *mqtt_topic = cJSON_GetObjectItem(root, "mqttTopic");
@@ -61,7 +61,7 @@ static bool parse_report_config(const char *json_str) {
 
     cJSON *regular_interval_type = cJSON_GetObjectItem(root, "regularInterval");
     if (regular_interval_type) {
-        g_report_config.regular_interval_type = regular_interval_type->valueint;
+        g_report_config.regular_interval_type = (regular_interval_type_t)regular_interval_type->valueint;
     }
 
     cJSON *regular_fixed_time = cJSON_GetObjectItem(root, "regularFixedTime");

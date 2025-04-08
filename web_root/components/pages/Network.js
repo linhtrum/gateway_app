@@ -414,146 +414,144 @@ function Network() {
         onTabChange=${setActiveTab}
       />
       <div class="max-w-2xl mx-auto">
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <div class="text-xl font-semibold mb-6">Network Settings</div>
-          <form onSubmit=${handleSubmit} class="space-y-4">
-            ${activeTab === "priority"
-              ? html`
-                  ${Select({
-                    name: "np",
-                    label: "Network Priority",
-                    value: networkConfig.np || 0,
-                    onChange: handleInputChange,
-                    options: CONFIG.NETWORK_PRIORITY,
-                  })}
-                `
-              : activeTab === "ethernet"
-              ? html`
-                  ${Checkbox({
-                    name: "dh",
-                    label: "Enable DHCP",
-                    value: networkConfig.dh,
-                    onChange: handleInputChange,
-                  })}
-
-                  <${NetworkField}
-                    label="IP Address"
-                    name="ip"
-                    value=${networkConfig.ip}
-                    onChange=${handleInputChange}
-                    error=${errors.ip}
-                    disabled=${networkConfig.dh}
-                    placeholder="192.168.1.100"
-                  />
-                  <${NetworkField}
-                    label="Subnet Mask"
-                    name="sm"
-                    value=${networkConfig.sm}
-                    onChange=${handleInputChange}
-                    error=${errors.sm}
-                    disabled=${networkConfig.dh}
-                    placeholder="255.255.255.0"
-                  />
-                  <${NetworkField}
-                    label="Gateway"
-                    name="gw"
-                    value=${networkConfig.gw}
-                    onChange=${handleInputChange}
-                    error=${errors.gw}
-                    disabled=${networkConfig.dh}
-                    placeholder="192.168.1.1"
-                  />
-                  <${NetworkField}
-                    label="Primary DNS"
-                    name="d1"
-                    value=${networkConfig.d1}
-                    onChange=${handleInputChange}
-                    error=${errors.d1}
-                    disabled=${networkConfig.dh}
-                    placeholder="8.8.8.8"
-                  />
-                  <${NetworkField}
-                    label="Secondary DNS"
-                    name="d2"
-                    value=${networkConfig.d2}
-                    onChange=${handleInputChange}
-                    error=${errors.d2}
-                    disabled=${networkConfig.dh}
-                    placeholder="8.8.4.4"
-                  />
-                `
-              : html`
-                  <div class="space-y-4">
+        <div class="space-y-6">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="text-xl font-semibold mb-6">Network Settings</div>
+            <form onSubmit=${handleSubmit} class="space-y-4">
+              ${activeTab === "priority"
+                ? html`
                     ${Select({
-                      name: "mo",
-                      label: "SIM Switch",
-                      value: networkConfig.mo || 0,
+                      name: "np",
+                      label: "Network Priority",
+                      value: networkConfig.np || 0,
                       onChange: handleInputChange,
-                      options: CONFIG.SIM_SWITCH,
+                      options: CONFIG.NETWORK_PRIORITY,
                     })}
-                    ${Input({
-                      name: "apn",
-                      label: "APN Name",
-                      value: networkConfig.apn || "",
+                  `
+                : activeTab === "ethernet"
+                ? html`
+                    ${Checkbox({
+                      name: "dh",
+                      label: "Enable DHCP",
+                      value: networkConfig.dh,
                       onChange: handleInputChange,
-                      maxlength: 32,
-                      placeholder: "Enter APN name",
-                      required: true,
                     })}
-                    ${Input({
-                      name: "au",
-                      label: "Username",
-                      value: networkConfig.au || "",
-                      onChange: handleInputChange,
-                      maxlength: 32,
-                      placeholder: "Enter username",
-                      required: true,
-                    })}
-                    ${Input({
-                      name: "ap",
-                      label: "Password",
-                      value: networkConfig.ap || "",
-                      onChange: handleInputChange,
-                      maxlength: 32,
-                      placeholder: "Enter password",
-                      required: true,
-                    })}
-                    ${Select({
-                      name: "at",
-                      label: "Auth Type",
-                      value: networkConfig.at || 0,
-                      onChange: handleInputChange,
-                      options: CONFIG.AUTH_TYPES,
-                    })}
-                  </div>
-                `}
-          </form>
+                    <${NetworkField}
+                      label="IP Address"
+                      name="ip"
+                      value=${networkConfig.ip}
+                      onChange=${handleInputChange}
+                      error=${errors.ip}
+                      disabled=${networkConfig.dh}
+                      placeholder="192.168.1.100"
+                    />
+                    <${NetworkField}
+                      label="Subnet Mask"
+                      name="sm"
+                      value=${networkConfig.sm}
+                      onChange=${handleInputChange}
+                      error=${errors.sm}
+                      disabled=${networkConfig.dh}
+                      placeholder="255.255.255.0"
+                    />
+                    <${NetworkField}
+                      label="Gateway"
+                      name="gw"
+                      value=${networkConfig.gw}
+                      onChange=${handleInputChange}
+                      error=${errors.gw}
+                      disabled=${networkConfig.dh}
+                      placeholder="192.168.1.1"
+                    />
+                    <${NetworkField}
+                      label="Primary DNS"
+                      name="d1"
+                      value=${networkConfig.d1}
+                      onChange=${handleInputChange}
+                      error=${errors.d1}
+                      disabled=${networkConfig.dh}
+                      placeholder="8.8.8.8"
+                    />
+                    <${NetworkField}
+                      label="Secondary DNS"
+                      name="d2"
+                      value=${networkConfig.d2}
+                      onChange=${handleInputChange}
+                      error=${errors.d2}
+                      disabled=${networkConfig.dh}
+                      placeholder="8.8.4.4"
+                    />
+                  `
+                : html`
+                    <div class="space-y-4">
+                      ${Select({
+                        name: "mo",
+                        label: "SIM Switch",
+                        value: networkConfig.mo || 0,
+                        onChange: handleInputChange,
+                        options: CONFIG.SIM_SWITCH,
+                      })}
+                      ${Input({
+                        name: "apn",
+                        label: "APN Name",
+                        value: networkConfig.apn || "",
+                        onChange: handleInputChange,
+                        maxlength: 32,
+                        placeholder: "Enter APN name",
+                        required: true,
+                      })}
+                      ${Input({
+                        name: "au",
+                        label: "Username",
+                        value: networkConfig.au || "",
+                        onChange: handleInputChange,
+                        maxlength: 32,
+                        placeholder: "Enter username",
+                        required: true,
+                      })}
+                      ${Input({
+                        name: "ap",
+                        label: "Password",
+                        value: networkConfig.ap || "",
+                        onChange: handleInputChange,
+                        maxlength: 32,
+                        placeholder: "Enter password",
+                        required: true,
+                      })}
+                      ${Select({
+                        name: "at",
+                        label: "Auth Type",
+                        value: networkConfig.at || 0,
+                        onChange: handleInputChange,
+                        options: CONFIG.AUTH_TYPES,
+                      })}
+                    </div>
+                  `}
+            </form>
+          </div>
+          <div class="flex justify-end gap-4">
+            <${Button}
+              onClick=${() => {
+                if (confirm("Are you sure you want to discard all changes?")) {
+                  fetchConfig();
+                }
+              }}
+              variant="secondary"
+              icon="CloseIcon"
+              disabled=${isSaving}
+            >
+              Cancel
+            <//>
+            <${Button}
+              onClick=${handleSubmit}
+              disabled=${isSaving}
+              loading=${isSaving}
+              icon="SaveIcon"
+            >
+              ${isSaving ? "Saving..." : "Save"}
+            <//>
+          </div>
         </div>
-      </div>
-
-      <div
-        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-end gap-4 w-full"
-      >
-        <${Button}
-          onClick=${() => {
-            if (confirm("Are you sure you want to discard all changes?")) {
-              fetchConfig();
-            }
-          }}
-          variant="secondary"
-          icon="CloseIcon"
-          disabled=${isSaving}
-        >
-          Cancel
-        <//>
-        <${Button}
-          onClick=${handleSubmit}
-          disabled=${isSaving}
-          loading=${isSaving}
-          icon="SaveIcon"
-        >
-          ${isSaving ? "Saving..." : "Save"}
-        <//>
       </div>
     </div>
   `;

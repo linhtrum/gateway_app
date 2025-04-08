@@ -630,6 +630,105 @@ static void handle_edge_set(struct mg_connection *c, struct mg_http_message *hm)
     }
 }
 
+
+static void handle_io_get(struct mg_connection *c) {
+    mg_http_reply(c, 200, s_json_header, "{\"di1\":1,\"di2\":0,\"do1\":1,\"do2\":0,\"ai1\":1000,\"ai2\":2000}");
+}
+
+static void handle_io_do_toggle(struct mg_connection *c, struct mg_http_message *hm) {
+    mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+}
+
+static void handle_io_function_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("io_function_config", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read io function config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+static void handle_io_function_set(struct mg_connection *c, struct mg_http_message *hm) {   
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    int result = db_write("io_function_config", (void*)json_str, strlen(json_str) + 1);
+    free(json_str);
+
+    if (result == 0) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply io function configuration\"}");
+    }
+}
+
+static void handle_socket_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("socket_config", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read socket config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+static void handle_socket_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    int result = db_write("socket_config", (void*)json_str, strlen(json_str) + 1);
+    free(json_str);
+
+    if (result == 0) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply socket configuration\"}");
+    }
+}
+
+static void handle_socket2_get(struct mg_connection *c) {
+    char config_str[4096] = {0};
+    int read_len = db_read("socket2_config", config_str, sizeof(config_str));
+    if (read_len <= 0) {
+        DBG_ERROR("Failed to read socket2 config from database");
+        mg_http_reply(c, 200, s_json_header, "%s", "{}");
+        return;
+    }
+    mg_http_reply(c, 200, s_json_header, "%s", config_str);
+}
+
+static void handle_socket2_set(struct mg_connection *c, struct mg_http_message *hm) {
+    char *json_str = calloc(1, hm->body.len + 1);
+    if (!json_str) {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to allocate memory\"}");
+        return;
+    }
+    memcpy(json_str, hm->body.buf, hm->body.len);
+    json_str[hm->body.len] = '\0';
+
+    int result = db_write("socket2_config", (void*)json_str, strlen(json_str) + 1);
+    free(json_str);
+
+    if (result == 0) {
+        mg_http_reply(c, 200, s_json_header, "{\"status\":\"success\"}");
+    } else {
+        mg_http_reply(c, 500, s_json_header, "{\"error\":\"Failed to apply socket2 configuration\"}");
+    }
+}
+
 // Function to send message to all connected websocket clients
 void send_websocket_message(const char *message) {
     if (!message || !ws_conn) return;
@@ -711,11 +810,23 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         else if (mg_match(hm->uri, mg_str("/api/serial/set"), NULL)) {
             handle_serial_set(c, hm, 0);
         }
+        else if (mg_match(hm->uri, mg_str("/api/socket/get"), NULL)) {
+            handle_socket_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/socket/set"), NULL)) {
+            handle_socket_set(c, hm);
+        }
         else if (mg_match(hm->uri, mg_str("/api/serial2/get"), NULL)) {
             handle_serial_get(c, 1);
         }
         else if (mg_match(hm->uri, mg_str("/api/serial2/set"), NULL)) {
             handle_serial_set(c, hm, 1);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/socket2/get"), NULL)) {
+            handle_socket_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/socket2/set"), NULL)) {
+            handle_socket_set(c, hm);
         }
         else if (mg_match(hm->uri, mg_str("/api/mqtt/get"), NULL)) {
             handle_mqtt_get(c);
@@ -753,6 +864,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
         // else if (mg_match(hm->uri, mg_str("/api/upload/mqtt/clientPrivateKey"), NULL)) {
         //     handle_upload_mqtt_client_private_key(c, hm);
         // }
+        else if (mg_match(hm->uri, mg_str("/api/io/get"), NULL)) {
+            handle_io_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/io/do/toggle"), NULL)) {
+            handle_io_do_toggle(c, hm);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/io-function/get"), NULL)) {
+            handle_io_function_get(c);
+        }
+        else if (mg_match(hm->uri, mg_str("/api/io-function/set"), NULL)) {
+            handle_io_function_set(c, hm);
+        }
         else {
             // struct mg_http_serve_opts opts;
             // memset(&opts, 0, sizeof(opts));

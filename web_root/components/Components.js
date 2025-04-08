@@ -1086,7 +1086,14 @@ export const Select = ({
   `;
 };
 
-export const Checkbox = ({ name, label, value, onChange, key }) => {
+export const Checkbox = ({
+  name,
+  label,
+  value,
+  onChange,
+  key,
+  label_extra,
+}) => {
   return html`
     <div key=${key} class="flex items-center">
       <input
@@ -1096,8 +1103,16 @@ export const Checkbox = ({ name, label, value, onChange, key }) => {
         onChange=${onChange}
         class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
       />
-      ${label &&
-      html` <label class="ml-2 block text-sm text-gray-700">${label}</label> `}
+      ${label_extra
+        ? html`
+            <h2 class="ml-2 block text-sm text-gray-700 font-semibold">
+              ${label_extra}
+            </h2>
+          `
+        : label &&
+          html`
+            <label class="ml-2 block text-sm text-gray-700">${label}</label>
+          `}
     </div>
   `;
 };

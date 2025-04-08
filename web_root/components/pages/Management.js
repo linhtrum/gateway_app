@@ -1,17 +1,18 @@
 "use strict";
 import { h, html, useState } from "../../bundle.js";
-import { Icons, Button } from "../Components.js";
+import { Icons, Button, FileInput } from "../Components.js";
 
 // Constants and configuration
 const CONFIG = {
-  API_TIMEOUT: 10000, // 10 seconds
-  REBOOT_DELAY: 3000, // 3 seconds
+  API_TIMEOUT: 30000, // 30 seconds
+  REBOOT_DELAY: 5000, // 5 seconds
 };
 
 function Management() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [isUploading, setIsUploading] = useState(false);
+  const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
@@ -19,53 +20,39 @@ function Management() {
   const factoryReset = async () => {
     if (
       !confirm(
-        "Are you sure you want to perform a factory reset? This will erase all settings and reboot the device."
+        "Are you sure you want to perform a factory reset? This will erase all settings."
       )
     ) {
       return;
     }
 
     try {
-      setIsSaving(true);
+      setIsRestoring(true);
       setError(null);
       setSuccess(false);
 
-      const [factoryResponse, rebootResponse] = await Promise.all([
-        fetch("/api/factory/set", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }),
-        fetch("/api/reboot/set", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }),
-      ]);
+      const response = await fetch("/api/factory/reset", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
-      if (!factoryResponse.ok || !rebootResponse.ok) {
+      if (!response.ok) {
         throw new Error("Failed to perform factory reset");
       }
 
       setSuccess(true);
-      setMessage({
-        type: "success",
-        text: "Factory reset successful. Device is rebooting...",
-      });
-
+      setMessage(
+        "Factory reset successful. The system will reboot in 5 seconds..."
+      );
       setTimeout(() => {
         window.location.reload();
       }, CONFIG.REBOOT_DELAY);
     } catch (err) {
       setError(err.message);
-      setMessage({
-        type: "error",
-        text: err.message,
-      });
     } finally {
-      setIsSaving(false);
+      setIsRestoring(false);
     }
   };
 
@@ -75,62 +62,103 @@ function Management() {
       return;
     }
 
-    setIsRestoring(true);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        CONFIG.API_TIMEOUT
-      );
+      setIsSaving(true);
+      setError(null);
+      setSuccess(false);
 
       const response = await fetch("/api/reboot/set", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Failed to reboot device: ${response.statusText}`);
+        throw new Error("Failed to reboot device");
       }
 
-      setMessage({
-        type: "success",
-        text: "Device is rebooting. Please wait...",
-      });
-
-      // Refresh the page after a short delay
+      setSuccess(true);
+      setMessage("Device is rebooting. Please wait...");
       setTimeout(() => {
         window.location.reload();
       }, CONFIG.REBOOT_DELAY);
-    } catch (error) {
-      console.error("Error rebooting device:", error);
-      setMessage({
-        type: "error",
-        text:
-          error.name === "AbortError"
-            ? "Request timed out. Please try again."
-            : "Failed to reboot device",
-      });
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setIsRestoring(false);
+      setIsSaving(false);
+    }
+  };
+
+  const handleFirmwareUpload = async (file) => {
+    if (!file) return;
+
+    // Check file size (4MB limit)
+    if (file.size > 4 * 1024 * 1024) {
+      setError(`Firmware file size exceeds 4MB limit: ${file.name}`);
+      return;
+    }
+
+    if (
+      !confirm(
+        "Are you sure you want to upload new firmware? The device will reboot after the update."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setError(null);
+      setSuccess(false);
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/firmware/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload firmware");
+      }
+
+      setSuccess(true);
+      setMessage(
+        "Firmware upload successful. The device will reboot in 5 seconds..."
+      );
+      setTimeout(() => {
+        window.location.reload();
+      }, CONFIG.REBOOT_DELAY);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   // Render message component
   const renderMessage = () => {
-    if (!message.text) return null;
-    const bgColor = message.type === "success" ? "bg-green-100" : "bg-red-100";
-    const textColor =
-      message.type === "success" ? "text-green-800" : "text-red-800";
-    return html`
-      <div class="mb-4 p-4 rounded-lg ${bgColor} ${textColor}">
-        ${message.text}
-      </div>
-    `;
+    if (error) {
+      return html`
+        <div
+          class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded"
+        >
+          ${error}
+        </div>
+      `;
+    }
+    if (success) {
+      return html`
+        <div
+          class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded"
+        >
+          ${message || "Operation successful"}
+        </div>
+      `;
+    }
+    return null;
   };
 
   return html`
@@ -139,66 +167,56 @@ function Management() {
       ${renderMessage()}
       <div class="max-w-2xl mx-auto">
         <div class="space-y-6">
-          <!-- Reboot Section -->
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-lg font-medium text-gray-900 mb-4">
-              Device Reboot
-            </h2>
+          <!-- Firmware Update Section -->
+          <div class="bg-white shadow rounded-lg p-6">
+            <h2 class="text-lg font-medium mb-4">Firmware Update</h2>
             <p class="text-gray-600 mb-4">
-              Restart the device. This will temporarily disconnect all
-              connections.
+              Upload a new firmware file to update the device. The device will
+              automatically reboot after the update.
+            </p>
+            <div class="max-w-md">
+              ${FileInput({
+                name: "firmware",
+                label: "Firmware File",
+                note: "Select firmware file to upload (max 4MB)",
+                onUpload: handleFirmwareUpload,
+                isUploading: isUploading,
+                accept: ".bin,.hex",
+              })}
+            </div>
+          </div>
+
+          <!-- Device Reboot Section -->
+          <div class="bg-white shadow rounded-lg p-6">
+            <h2 class="text-lg font-medium mb-4">Device Reboot</h2>
+            <p class="text-gray-600 mb-4">
+              Reboot the device to apply any pending changes or to refresh the
+              system.
             </p>
             <${Button}
               onClick=${handleReboot}
-              disabled=${isRestoring}
-              loading=${isRestoring}
-              variant="warning"
-              icon="RefreshIcon"
+              disabled=${isSaving}
+              loading=${isSaving}
+              variant="primary"
             >
-              ${isRestoring ? "Rebooting..." : "Reboot Device"}
+              ${isSaving ? "Rebooting..." : "Reboot Device"}
             <//>
           </div>
 
           <!-- Factory Reset Section -->
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-lg font-medium text-gray-900 mb-4">
-              Factory Reset
-            </h2>
+          <div class="bg-white shadow rounded-lg p-6">
+            <h2 class="text-lg font-medium mb-4">Factory Reset</h2>
             <p class="text-gray-600 mb-4">
-              Reset all settings to factory defaults. This action cannot be
-              undone.
+              Reset all settings to factory defaults. This will erase all custom
+              configurations.
             </p>
-            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-              <div class="flex">
-                <div class="flex-shrink-0">
-                  <svg
-                    class="h-5 w-5 text-yellow-400"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fill-rule="evenodd"
-                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <p class="text-sm text-yellow-700">
-                    Warning: This will erase all settings and restore the device
-                    to factory defaults. The device will reboot after the reset.
-                  </p>
-                </div>
-              </div>
-            </div>
             <${Button}
               onClick=${factoryReset}
-              disabled=${isSaving}
-              loading=${isSaving}
+              disabled=${isRestoring}
+              loading=${isRestoring}
               variant="danger"
-              icon="ResetIcon"
             >
-              ${isSaving ? "Resetting..." : "Factory Reset"}
+              ${isRestoring ? "Resetting..." : "Factory Reset"}
             <//>
           </div>
         </div>

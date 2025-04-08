@@ -23,6 +23,11 @@ typedef struct {
     char last_will_message[256];     // "lastWillMessage": Last will message
     uint8_t last_will_qos;           // "lastWillQos": Last will QoS
     bool last_will_retained;         // "lastWillRetained": Last will retained flag
+    uint8_t ssl_protocol;            // "sslProtocol": SSL protocol
+    uint8_t ssl_verify;              // "sslVerify": SSL verify
+    char ssl_ca_cert[256];           // "sslCACert": SSL CA certificate
+    char ssl_client_cert[256];       // "sslClientCert": SSL client certificate
+    char ssl_client_key[256];        // "sslClientKey": SSL client key
 } mqtt_config_t;
 
 // MQTT publish topic structure

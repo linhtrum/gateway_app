@@ -216,10 +216,28 @@ function MQTT() {
         throw new Error("Failed to save configurations");
       }
 
+      const rebootResponse = await fetch("/api/reboot/set", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!rebootResponse.ok) {
+        throw new Error("Failed to reboot server");
+      }
+
       setSuccess(true);
+
+      // Show success message for 3 seconds
+      setTimeout(() => {
+        setSuccess(false);
+      }, 3000);
+
+      // Refresh page after 5 seconds
       setTimeout(() => {
         window.location.reload();
-      }, 1000);
+      }, 5000);
     } catch (err) {
       setError(err.message);
     } finally {

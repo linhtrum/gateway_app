@@ -4,6 +4,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum {
+    REPORT_CHANNEL_MQTT = 0,
+    REPORT_CHANNEL_SOCKET_1 = 1,
+    REPORT_CHANNEL_SOCKET_2 = 2,
+} report_channel_type_t;
+
 // Regular reporting interval types
 typedef enum {
     REGULAR_INTERVAL_FIXED_TIME = 0,  // Report at fixed time (HHMMSS)
@@ -16,7 +22,7 @@ typedef enum {
 // Report configuration structure
 typedef struct {
     bool enabled;                    // Enable/disable reporting
-    uint8_t channel;                 // Reporting channel (0: MQTT, 1: HTTP, etc.)
+    report_channel_type_t channel;  // Reporting channel (0: MQTT, 1: HTTP, etc.)
     char mqtt_topic[128];           // MQTT topic for publishing
     uint8_t mqtt_qos;               // MQTT QoS level
     bool periodic_enabled;          // Enable periodic reporting
@@ -27,7 +33,7 @@ typedef struct {
     bool failure_padding_enabled;   // Enable failure padding
     char failure_padding_content[256]; // Content for failure padding
     bool quotation_mark;            // Enable quotation marks for values
-    char json_template[4096];       // JSON template for data formatting
+    char json_template[2048];       // JSON template for data formatting
     bool mqtt_data_query_set;       // Enable MQTT data query set
     uint8_t mqtt_query_set_type;    // MQTT query set type
     char mqtt_query_set_topic[128]; // MQTT query set topic

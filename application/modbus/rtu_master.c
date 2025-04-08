@@ -135,44 +135,56 @@ static void free_formula_vars(void) {
 }
 
 // Send data to serial or TCP port
-static int rtu_master_send(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout){
+static int rtu_master_send(device_t *device, uint8_t *buf, int len){
     int send_len;
 
-    if(port <= 1)
+    if(device->port < PORT_ETHERNET)
     {
-        send_len = serial_write(fd, buf, len);
+        send_len = serial_write(device->fd, buf, len);
+    }
+    else if(device->port == PORT_ETHERNET)
+    {
+        send_len = tcp_write(device->fd, buf, len);
     }
     else
     {
-        send_len = tcp_write(fd, buf, len);
+        send_len = -1;
     }
     return send_len;
 }
 
 // Receive data from serial or TCP port
-static int rtu_master_receive(int port, int fd, uint8_t *buf, int len, int timeout, int byte_timeout){
-    int read_len;
+static int rtu_master_receive(device_t *device, uint8_t *buf, int len, int timeout, int byte_timeout){
+    int read_len = 0;
 
-    if(port <= 1)
+    if(device->port < PORT_ETHERNET)
     {
-        read_len = serial_read(fd, buf, len, timeout, byte_timeout);
+        read_len = serial_read(device->fd, buf, len, timeout, byte_timeout);
+    }
+    else if(device->port == PORT_ETHERNET)
+    {
+        read_len = tcp_read(device->fd, buf, len, timeout, byte_timeout);
     }
     else
     {
-        read_len = tcp_read(fd, buf, len, timeout, byte_timeout);
+        // read_len = -1;
     }
     return read_len;
 }
 
 // Flush receive buffer of serial or TCP port
-static void rtu_master_flush_rx(int port, int fd){
-    if(port <= 1)
+static void rtu_master_flush_rx(device_t *device){
+    if(device->port < PORT_ETHERNET)
     {
-        serial_flush_rx(fd);
+        serial_flush_rx(device->fd);
+    }
+    else if(device->port == PORT_ETHERNET)
+    {
+        tcp_flush_rx(device->fd);
     }
     else
     {
-        tcp_flush_rx(fd);
+        // Do nothing
     }
 }
 
@@ -240,7 +252,7 @@ static int convert_node_value(node_t *node, uint16_t *data) {
     // Convert raw data to appropriate data type
     switch (node->data_type) {
         case DATA_TYPE_BOOLEAN:
-            if (node->function == 1 || node->function == 2) {
+            if (node->function == FUNCTION_CODE_READ_COILS || node->function == FUNCTION_CODE_READ_DISCRETE_INPUTS) {
                 node->value.bool_val = (((uint8_t *)data)[0] != 0);
             } else {
                 node->value.bool_val = (data[0] != 0);
@@ -440,8 +452,8 @@ static void send_hex_string(const uint8_t *data, int len) {
 }
 
 // Poll a single node with improved error handling
-static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_t *node) {
-    if (!ctx || fd < 0 || !device || !node) return RTU_MASTER_INVALID;
+static int poll_single_node(agile_modbus_t *ctx, device_t *device, node_t *node) {
+    if (!ctx || !device || !node) return RTU_MASTER_INVALID;
 
     uint16_t data[4] = {0};  // Buffer for all data types
     int rc;
@@ -449,16 +461,16 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     
     // Send Modbus request based on function code
     switch(node->function) {
-        case 1: // Read coils
+        case FUNCTION_CODE_READ_COILS: // Read coils
             rc = agile_modbus_serialize_read_bits(ctx, node->address, reg_count);
             break;
-        case 2: // Read discrete inputs
+        case FUNCTION_CODE_READ_DISCRETE_INPUTS: // Read discrete inputs
             rc = agile_modbus_serialize_read_input_bits(ctx, node->address, reg_count);
             break;
-        case 3: // Read holding registers
+        case FUNCTION_CODE_READ_HOLDING_REGISTERS: // Read holding registers
             rc = agile_modbus_serialize_read_registers(ctx, node->address, reg_count);
             break;
-        case 4: // Read input registers
+        case FUNCTION_CODE_READ_INPUT_REGISTERS: // Read input registers
             rc = agile_modbus_serialize_read_input_registers(ctx, node->address, reg_count);
             break;
         default:
@@ -472,15 +484,15 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     // Send request
-    rtu_master_flush_rx(device->port, fd);
-    int send_len = rtu_master_send(device->port, fd, ctx->send_buf, rc, node->timeout, 10);
+    rtu_master_flush_rx(device);
+    int send_len = rtu_master_send(device, ctx->send_buf, rc);
     if (send_len != rc) {
         DBG_ERROR("Failed to send request for node %s", node->name);
         return RTU_MASTER_ERROR;
     }
 
     // Read response with node-specific timeout
-    int read_len = rtu_master_receive(device->port, fd, ctx->read_buf, ctx->read_bufsz, node->timeout, 10);
+    int read_len = rtu_master_receive(device, ctx->read_buf, ctx->read_bufsz, node->timeout, 10);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for node %s (timeout: %dms)", 
                  node->name, node->timeout);
@@ -496,16 +508,16 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
 
         // Process response based on function code
         switch(node->function) {
-            case 1: // Read coils
+            case FUNCTION_CODE_READ_COILS: // Read coils
                 rc = agile_modbus_deserialize_read_bits(ctx, read_len, (uint8_t *)data);
                 break;
-            case 2: // Read discrete inputs
+            case FUNCTION_CODE_READ_DISCRETE_INPUTS: // Read discrete inputs
                 rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, (uint8_t *)data);
                 break;
-            case 3: // Read holding registers
+            case FUNCTION_CODE_READ_HOLDING_REGISTERS: // Read holding registers
                 rc = agile_modbus_deserialize_read_registers(ctx, read_len, data);
                 break;
-            case 4: // Read input registers
+            case FUNCTION_CODE_READ_INPUT_REGISTERS: // Read input registers
                 rc = agile_modbus_deserialize_read_input_registers(ctx, read_len, data);
                 break;
         }
@@ -566,26 +578,26 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
 }
 
 // Poll a group of nodes with the same function code
-static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_group_t *group) {
-    if (!ctx || fd < 0 || !device || !group) return RTU_MASTER_INVALID;
+static int poll_group_node(agile_modbus_t *ctx, device_t *device, node_group_t *group) {
+    if (!ctx || !device || !group) return RTU_MASTER_INVALID;
 
     int rc;
     
     // Send Modbus request based on function code
     switch(group->function) {
-        case 1: // Read coils
+        case FUNCTION_CODE_READ_COILS: // Read coils
             rc = agile_modbus_serialize_read_bits(ctx, group->start_address, 
                                                 group->register_count);
             break;
-        case 2: // Read discrete inputs
+        case FUNCTION_CODE_READ_DISCRETE_INPUTS: // Read discrete inputs
             rc = agile_modbus_serialize_read_input_bits(ctx, group->start_address, 
                                                       group->register_count);
             break;
-        case 3: // Read holding registers
+        case FUNCTION_CODE_READ_HOLDING_REGISTERS: // Read holding registers
             rc = agile_modbus_serialize_read_registers(ctx, group->start_address, 
                                                      group->register_count);
             break;
-        case 4: // Read input registers
+        case FUNCTION_CODE_READ_INPUT_REGISTERS: // Read input registers
             rc = agile_modbus_serialize_read_input_registers(ctx, group->start_address, 
                                                            group->register_count);
             break;
@@ -601,8 +613,8 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Send request
-    rtu_master_flush_rx(device->port, fd);
-    int send_len = rtu_master_send(device->port, fd, ctx->send_buf, rc, MODBUS_RTU_TIMEOUT, 10);
+    rtu_master_flush_rx(device);
+    int send_len = rtu_master_send(device, ctx->send_buf, rc);
     if (send_len != rc) {
         DBG_ERROR("Failed to send request for group (function: %d, start: %d)",
                  group->function, group->start_address);
@@ -610,8 +622,7 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Read response
-    int read_len = rtu_master_receive(device->port, fd, ctx->read_buf, ctx->read_bufsz, 
-                             MODBUS_RTU_TIMEOUT, 10);
+    int read_len = rtu_master_receive(device, ctx->read_buf, ctx->read_bufsz, MODBUS_RTU_TIMEOUT, 10);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
                  group->function, group->start_address);
@@ -627,16 +638,16 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
 
         // Process response based on function code
         switch(group->function) {
-            case 1: // Read coils
+            case FUNCTION_CODE_READ_COILS: // Read coils
                 rc = agile_modbus_deserialize_read_bits(ctx, read_len, (uint8_t *)group->data_buffer);
                 break;
-            case 2: // Read discrete inputs
+            case FUNCTION_CODE_READ_DISCRETE_INPUTS: // Read discrete inputs
                 rc = agile_modbus_deserialize_read_input_bits(ctx, read_len, (uint8_t *)group->data_buffer);
                 break;
-            case 3: // Read holding registers
+            case FUNCTION_CODE_READ_HOLDING_REGISTERS: // Read holding registers
                 rc = agile_modbus_deserialize_read_registers(ctx, read_len, group->data_buffer);
                 break;
-            case 4: // Read input registers
+            case FUNCTION_CODE_READ_INPUT_REGISTERS: // Read input registers
                 rc = agile_modbus_deserialize_read_input_registers(ctx, read_len, group->data_buffer);
                 break;
         }
@@ -652,10 +663,10 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
         while (node && node->function == group->function) {
             // For coils and discrete inputs, each bit is returned as a byte
             uint16_t *data_ptr;
-            if (node->function == 1 || node->function == 2) {
+            if (node->function == FUNCTION_CODE_READ_COILS || node->function == FUNCTION_CODE_READ_DISCRETE_INPUTS) {
                 // For bit functions, offset is in bits but data is in bytes
                 data_ptr = (uint16_t *)&((uint8_t *)group->data_buffer)[node->offset];
-        } else {
+            } else {
                 // For register functions, offset is in registers
                 data_ptr = &group->data_buffer[node->offset];
             }
@@ -798,8 +809,8 @@ static char* build_node_json(const char *node_name, node_t *node) {
     return json_str;
 }
 
-void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *current_device) {
-    if (!current_device || fd < 0 || !ctx) {
+void rtu_master_poll(agile_modbus_t *ctx, device_t *current_device) {
+    if (!current_device || current_device->fd < 0 || !ctx) {
         DBG_ERROR("Invalid parameters for polling");
         return;
     }
@@ -815,7 +826,7 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *current_device) {
         // Poll each group
         node_group_t *current_group = current_device->groups;
         while (current_group) {
-            int result = poll_group_node(ctx, fd, current_device, current_group);
+            int result = poll_group_node(ctx, current_device, current_group);
             if (result != RTU_MASTER_OK) {
                 DBG_ERROR("Failed to poll group %d (error: %d)", 
                             current_group->function, result);
@@ -828,7 +839,7 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *current_device) {
         // Basic polling mode - poll each node individually
         node_t *current_node = current_device->nodes;
         while (current_node) {
-            int result = poll_single_node(ctx, fd, current_device, current_node);
+            int result = poll_single_node(ctx, current_device, current_node);
             if (result != RTU_MASTER_OK) {
                 DBG_ERROR("Failed to poll node %s (error: %d)", 
                             current_node->name, result);
@@ -1045,26 +1056,36 @@ static void *rtu_master_thread(void *arg) {
         device_t *current_device = device_config;
         while (current_device) {
             // Initialize appropriate context based on port
-            if (current_device->port < 2) {
+            if (current_device->port < PORT_ETHERNET) {
                 // RTU mode for ports 0 and 1
                 if (!ctx || ctx != &ctx_rtu._ctx) {
                     agile_modbus_rtu_init(&ctx_rtu, master_send_buf, sizeof(master_send_buf),
                                         master_recv_buf, sizeof(master_recv_buf));
                     ctx = &ctx_rtu._ctx;
                 }
-                if (serial_fd < 0) {    
-                    serial_fd = serial_open(current_device->port);  
-                    if (serial_fd < 0) {
+
+                if(current_device->fd < 0) {
+                    serial_config_t *serial = serial_get_config(current_device->port);
+                    if (!serial) {
+                        DBG_ERROR("Failed to get serial configuration for port %d", current_device->port);
+                        current_device = current_device->next;
+                        continue;
+                    }
+
+                    if (!serial->is_open) {
+                        serial_open(current_device->port);
+                    }
+                    
+                    if (serial->fd < 0) {
                         DBG_ERROR("Failed to open serial port %d", current_device->port);
                         current_device = current_device->next;
                         continue;
                     }
+
+                    current_device->fd = serial->fd;
                 }
-                // Poll device using RTU context
-                rtu_master_poll(ctx, serial_fd, current_device);
-                serial_close(serial_fd);
-                serial_fd = -1;
-            } else if (current_device->port == 2) {
+                rtu_master_poll(ctx, current_device);
+            } else if (current_device->port == PORT_ETHERNET) {
                 // TCP mode for port 2
                 if (!ctx || ctx != &ctx_tcp._ctx) {
                     agile_modbus_tcp_init(&ctx_tcp, master_send_buf, sizeof(master_send_buf),
@@ -1073,23 +1094,26 @@ static void *rtu_master_thread(void *arg) {
                 }
 
                 // Connect to TCP server if not already connected
-                if (tcp_fd < 0) {
+                if (current_device->fd < 0) {
                     tcp_fd = tcp_connect(current_device->server_address, current_device->server_port);
                     if (tcp_fd < 0) {
                         DBG_ERROR("Failed to connect to TCP server %s:%d", current_device->server_address, current_device->server_port);
                         current_device = current_device->next;
                         continue;
                     }
+
+                    current_device->fd = tcp_fd;
                 }
 
                 // Poll device using TCP context
-                rtu_master_poll(ctx, tcp_fd, current_device);
-                tcp_close(tcp_fd);
-                tcp_fd = -1;
-            } else if (current_device->port == 4) {
+                rtu_master_poll(ctx, current_device);
+            } else if (current_device->port == PORT_VIRTUAL) {
                 // Virtual register mode - calculate formula values without polling
                 process_virtual_registers(current_device);
-        } else {
+            } else if (current_device->port == PORT_IO) {
+                // IO mode - read and write IO ports
+                // process_io_ports(current_device);
+            } else {
                 DBG_ERROR("Invalid port number: %d", current_device->port);
             }
 

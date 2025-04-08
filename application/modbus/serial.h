@@ -33,11 +33,11 @@ serial_config_t* serial_get_config(int port_index);
 
 // Serial port functions
 int serial_open(int port_index);
-// int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout);
-int serial_read(int port_index, uint8_t *buf, int len, int timeout_ms, int byte_timeout_ms);
-int serial_write(int port_index, const uint8_t *buf, int len);
-void serial_flush(int port_index);
-void serial_flush_rx(int port_index);
+int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout);
+int serial_read(int fd, uint8_t *buf, int len, int timeout_ms, int byte_timeout_ms);
+int serial_write(int fd, const uint8_t *buf, int len);
+void serial_flush(int fd);
+void serial_flush_rx(int fd);
 void serial_close(int port_index);
 void serial_close_all(void);
 

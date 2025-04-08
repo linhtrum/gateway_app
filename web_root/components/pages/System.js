@@ -399,36 +399,34 @@ function System() {
 
   return html`
     <div class="p-6">
+      <h1 class="text-2xl font-bold mb-6">System Configuration</h1>
       ${renderMessage()}
       <div class="max-w-2xl mx-auto">
-        <div class="space-y-4">
+        <div class="space-y-6">
           <!-- User Profile Section -->
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div class="space-y-4">
-                <h2 class="text-lg font-medium text-gray-900 mb-4">
-                  User Profile
-                </h2>
-                ${Input({
-                  type: "text",
-                  name: "username",
-                  label: "Username",
-                  value: systemConfig.username,
-                  onChange: (e) =>
-                    handleConfigChange("username", e.target.value),
-                  required: true,
-                  placeholder: "Enter your username",
-                })}
-                ${Input({
-                  type: "password",
-                  name: "password",
-                  label: "Password",
-                  value: systemConfig.password,
-                  onChange: (e) =>
-                    handleConfigChange("password", e.target.value),
-                  placeholder: "Leave blank to keep current password",
-                })}
-              </div>
+          <div class="bg-white shadow rounded-lg p-6">
+            <h2 class="text-lg font-medium mb-4">User Profile</h2>
+            <p class="text-gray-600 mb-4">
+              Configure your user account settings and credentials.
+            </p>
+            <div class="space-y-4">
+              ${Input({
+                type: "text",
+                name: "username",
+                label: "Username",
+                value: systemConfig.username,
+                onChange: (e) => handleConfigChange("username", e.target.value),
+                required: true,
+                placeholder: "Enter your username",
+              })}
+              ${Input({
+                type: "password",
+                name: "password",
+                label: "Password",
+                value: systemConfig.password,
+                onChange: (e) => handleConfigChange("password", e.target.value),
+                placeholder: "Leave blank to keep current password",
+              })}
               <div class="bg-gray-50 rounded-lg p-4">
                 <h3 class="text-sm font-medium text-gray-700 mb-2">
                   Password Requirements
@@ -443,11 +441,13 @@ function System() {
               </div>
             </div>
           </div>
+
           <!-- Time Settings Section -->
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-lg font-medium text-gray-900 mb-4">
-              Time Settings
-            </h2>
+          <div class="bg-white shadow rounded-lg p-6">
+            <h2 class="text-lg font-medium mb-4">Time Settings</h2>
+            <p class="text-gray-600 mb-4">
+              Configure time synchronization and timezone settings.
+            </p>
             <div class="space-y-4">
               ${Checkbox({
                 label: "Enable NTP Synchronization",
@@ -481,11 +481,11 @@ function System() {
           </div>
 
           <!-- Web Server Settings Section -->
-          <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-lg font-medium text-gray-900 mb-4">
-              Web Server Settings
-            </h2>
-
+          <div class="bg-white shadow rounded-lg p-6">
+            <h2 class="text-lg font-medium mb-4">Web Server Settings</h2>
+            <p class="text-gray-600 mb-4">
+              Configure web server and WebSocket port settings.
+            </p>
             <div class="space-y-4">
               ${Input({
                 type: "number",
@@ -511,21 +511,16 @@ function System() {
                 max: CONFIG.PORT_RANGE.max,
                 required: true,
               })}
-
-              <!-- Add Log Method Selection -->
-              <div class="mt-4">
-                ${Select({
-                  label: "Log Method",
-                  name: "logMethod",
-                  value: systemConfig.logMethod,
-                  onChange: (e) =>
-                    handleConfigChange("logMethod", parseInt(e.target.value)),
-                  options: LOG_METHOD_OPTIONS,
-                  required: true,
-                })}
-              </div>
-
-              <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4">
+              ${Select({
+                label: "Log Method",
+                name: "logMethod",
+                value: systemConfig.logMethod,
+                onChange: (e) =>
+                  handleConfigChange("logMethod", parseInt(e.target.value)),
+                options: LOG_METHOD_OPTIONS,
+                required: true,
+              })}
+              <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
                 <div class="flex">
                   <div class="flex-shrink-0">
                     <${Icons.WarningIcon} className="h-5 w-5 text-yellow-400" />
@@ -540,34 +535,33 @@ function System() {
               </div>
             </div>
           </div>
+
+          <!-- Save Changes Button -->
+          <div class="flex justify-end gap-4">
+            <${Button}
+              onClick=${() => {
+                if (confirm("Are you sure you want to discard all changes?")) {
+                  fetchConfig();
+                }
+              }}
+              variant="secondary"
+              icon="CloseIcon"
+              disabled=${isSaving}
+            >
+              Cancel
+            <//>
+            <${Button}
+              onClick=${() => saveConfig()}
+              disabled=${isSaving}
+              loading=${isSaving}
+              variant="primary"
+              icon="SaveIcon"
+              type="button"
+            >
+              ${isSaving ? "Saving..." : "Save Changes"}
+            <//>
+          </div>
         </div>
-      </div>
-      <!-- Save Changes Button -->
-      <div
-        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-end gap-4 w-full"
-      >
-        <${Button}
-          onClick=${() => {
-            if (confirm("Are you sure you want to discard all changes?")) {
-              fetchConfig();
-            }
-          }}
-          variant="secondary"
-          icon="CloseIcon"
-          disabled=${isSaving}
-        >
-          Cancel
-        <//>
-        <${Button}
-          onClick=${() => saveConfig()}
-          disabled=${isSaving}
-          loading=${isSaving}
-          variant="primary"
-          icon="SaveIcon"
-          type="button"
-        >
-          ${isSaving ? "Saving..." : "Save"}
-        <//>
       </div>
     </div>
   `;

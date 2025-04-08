@@ -70,13 +70,13 @@ function IOFunction() {
       setLoadError("");
 
       const [ioStatusResponse, ioConfigResponse] = await Promise.all([
-        fetch("/api/io/status", {
+        fetch("/api/io/get", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
         }),
-        fetch("/api/io/config", {
+        fetch("/api/io-function/get", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -95,12 +95,12 @@ function IOFunction() {
 
       // Update states with fetched data
       setIoStatus({
-        do1: ioStatusData.do?.do1 || false,
-        do2: ioStatusData.do?.do2 || false,
-        di1: ioStatusData.di?.di1 || false,
-        di2: ioStatusData.di?.di2 || false,
-        ai1: ioStatusData.ai?.ai1 || 0,
-        ai2: ioStatusData.ai?.ai2 || 0,
+        do1: ioStatusData.do1 || false,
+        do2: ioStatusData.do2 || false,
+        di1: ioStatusData.di1 || false,
+        di2: ioStatusData.di2 || false,
+        ai1: ioStatusData.ai1 || 0,
+        ai2: ioStatusData.ai2 || 0,
       });
 
       setIoConfig({
@@ -132,7 +132,7 @@ function IOFunction() {
       setSaveError("");
       setSaveSuccess(false);
 
-      const response = await fetch("/api/io/config", {
+      const response = await fetch("/api/io-function/set", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -161,14 +161,14 @@ function IOFunction() {
   };
 
   // Handle DO toggle
-  const handleDoToggle = async (doNumber) => {
+  const handleDoToggle = async (doNumber, doStatus) => {
     try {
       const response = await fetch("/api/io/do/toggle", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ do: doNumber }),
+        body: JSON.stringify({ [`do${doNumber}`]: doStatus }),
       });
 
       if (!response.ok) {
@@ -177,7 +177,7 @@ function IOFunction() {
 
       setIoStatus((prev) => ({
         ...prev,
-        [`do${doNumber}`]: !prev[`do${doNumber}`],
+        [`do${doNumber}`]: doStatus,
       }));
     } catch (error) {
       console.error("Error toggling DO:", error);
@@ -227,7 +227,7 @@ function IOFunction() {
     fetchData();
   }, []);
 
-  console.log(JSON.stringify(ioConfig));
+  // console.log(JSON.stringify(ioConfig));
 
   if (isLoading) {
     return html`
@@ -317,14 +317,17 @@ function IOFunction() {
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">DO1</span>
                       <button
-                        onClick=${() => handleDoToggle(1)}
+                        onClick=${() =>
+                          handleDoToggle(1, ioStatus.do1 === 1 ? 0 : 1)}
                         class=${`relative inline-flex h-6 w-11 items-center rounded-full ${
-                          ioStatus.do1 ? "bg-blue-600" : "bg-gray-200"
+                          ioStatus.do1 === 1 ? "bg-blue-600" : "bg-gray-200"
                         }`}
                       >
                         <span
                           class=${`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                            ioStatus.do1 ? "translate-x-6" : "translate-x-1"
+                            ioStatus.do1 === 1
+                              ? "translate-x-6"
+                              : "translate-x-1"
                           }`}
                         ></span>
                       </button>
@@ -332,14 +335,17 @@ function IOFunction() {
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">DO2</span>
                       <button
-                        onClick=${() => handleDoToggle(2)}
+                        onClick=${() =>
+                          handleDoToggle(2, ioStatus.do2 === 1 ? 0 : 1)}
                         class=${`relative inline-flex h-6 w-11 items-center rounded-full ${
-                          ioStatus.do2 ? "bg-blue-600" : "bg-gray-200"
+                          ioStatus.do2 === 1 ? "bg-blue-600" : "bg-gray-200"
                         }`}
                       >
                         <span
                           class=${`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                            ioStatus.do2 ? "translate-x-6" : "translate-x-1"
+                            ioStatus.do2 === 1
+                              ? "translate-x-6"
+                              : "translate-x-1"
                           }`}
                         ></span>
                       </button>
@@ -354,24 +360,24 @@ function IOFunction() {
                       <span class="text-gray-700">DI1</span>
                       <span
                         class=${`px-2 py-1 text-sm rounded-full ${
-                          ioStatus.di1
+                          ioStatus.di1 === 1
                             ? "bg-green-100 text-green-800"
                             : "bg-red-100 text-red-800"
                         }`}
                       >
-                        ${ioStatus.di1 ? "ON" : "OFF"}
+                        ${ioStatus.di1 === 1 ? "ON" : "OFF"}
                       </span>
                     </div>
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">DI2</span>
                       <span
                         class=${`px-2 py-1 text-sm rounded-full ${
-                          ioStatus.di2
+                          ioStatus.di2 === 1
                             ? "bg-green-100 text-green-800"
                             : "bg-red-100 text-red-800"
                         }`}
                       >
-                        ${ioStatus.di2 ? "ON" : "OFF"}
+                        ${ioStatus.di2 === 1 ? "ON" : "OFF"}
                       </span>
                     </div>
                   </div>
@@ -382,11 +388,15 @@ function IOFunction() {
                   <div class="space-y-4">
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">AI1</span>
-                      <span class="text-gray-900">${ioStatus.ai1} uA</span>
+                      <span class="text-gray-900"
+                        >${ioStatus.ai1} ${String.fromCodePoint(0x00b5)}A</span
+                      >
                     </div>
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">AI2</span>
-                      <span class="text-gray-900">${ioStatus.ai2} uA</span>
+                      <span class="text-gray-900"
+                        >${ioStatus.ai2} ${String.fromCodePoint(0x00b5)}A</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -630,34 +640,34 @@ function IOFunction() {
                     max: 65535,
                   })}
                 </div>
+                <!-- Save and Cancel Buttons -->
+                <div class="flex justify-end gap-4">
+                  <${Button}
+                    onClick=${() => {
+                      if (
+                        confirm("Are you sure you want to discard all changes?")
+                      ) {
+                        fetchData();
+                      }
+                    }}
+                    variant="secondary"
+                    icon="CloseIcon"
+                    disabled=${isSaving}
+                  >
+                    Cancel
+                  <//>
+                  <${Button}
+                    onClick=${saveConfig}
+                    disabled=${isSaving}
+                    loading=${isSaving}
+                    icon="SaveIcon"
+                  >
+                    ${isSaving ? "Saving..." : "Save"}
+                  <//>
+                </div>
               </div>
             </div>
           `}
-      <!-- Save and Cancel Buttons -->
-      <div
-        class="mt-8 border-t border-gray-200 pt-6 pb-4 flex justify-end gap-4"
-      >
-        <${Button}
-          onClick=${() => {
-            if (confirm("Are you sure you want to discard all changes?")) {
-              fetchData();
-            }
-          }}
-          variant="secondary"
-          icon="CloseIcon"
-          disabled=${isSaving}
-        >
-          Cancel
-        <//>
-        <${Button}
-          onClick=${saveConfig}
-          disabled=${isSaving}
-          loading=${isSaving}
-          icon="SaveIcon"
-        >
-          ${isSaving ? "Saving..." : "Save"}
-        <//>
-      </div>
     </div>
   `;
 }

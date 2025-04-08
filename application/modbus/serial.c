@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <time.h>
+#include <pthread.h>
 #include "cJSON.h"
 #include "db.h"
 
@@ -15,9 +16,92 @@
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
 
-
 // Static serial configuration array
 static serial_config_t g_serial_configs[MAX_SERIAL_PORTS] = {0};
+
+// Mutex for thread safety
+static pthread_mutex_t g_write_mutex[MAX_SERIAL_PORTS];
+static pthread_t g_write_thread[MAX_SERIAL_PORTS];
+static bool g_write_thread_running[MAX_SERIAL_PORTS] = {false};
+
+static int flush_write_buffer(serial_config_t *config);
+static bool should_flush_buffer(serial_config_t *config);
+
+// Write thread function
+static void* serial_write_thread(void* arg) {
+    int port_index = *((int*)arg);
+    free(arg); // Free the allocated port index
+
+    serial_config_t *config = &g_serial_configs[port_index];
+    
+    while (g_write_thread_running[port_index]) {
+        pthread_mutex_lock(&g_write_mutex[port_index]);
+        
+        // Check if buffer should be flushed
+        if (should_flush_buffer(config)) {
+            flush_write_buffer(config);
+        }
+        
+        pthread_mutex_unlock(&g_write_mutex[port_index]);
+        
+        // Sleep for a short duration (1ms) to avoid busy waiting
+        usleep(1000);
+    }
+    
+    return NULL;
+}
+
+// Start write thread for a port
+static bool start_write_thread(int port_index) {
+    if (g_write_thread_running[port_index]) {
+        return true; // Thread already running
+    }
+
+    // Initialize mutex
+    if (pthread_mutex_init(&g_write_mutex[port_index], NULL) != 0) {
+        DBG_ERROR("Failed to initialize mutex for port %d", port_index);
+        return false;
+    }
+
+    // Allocate port index for thread argument
+    int* thread_arg = (int*)malloc(sizeof(int));
+    if (!thread_arg) {
+        DBG_ERROR("Failed to allocate thread argument");
+        pthread_mutex_destroy(&g_write_mutex[port_index]);
+        return false;
+    }
+    *thread_arg = port_index;
+
+    // Set thread running flag
+    g_write_thread_running[port_index] = true;
+
+    // Create write thread
+    if (pthread_create(&g_write_thread[port_index], NULL, serial_write_thread, thread_arg) != 0) {
+        DBG_ERROR("Failed to create write thread for port %d", port_index);
+        free(thread_arg);
+        pthread_mutex_destroy(&g_write_mutex[port_index]);
+        g_write_thread_running[port_index] = false;
+        return false;
+    }
+
+    return true;
+}
+
+// Stop write thread for a port
+static void stop_write_thread(int port_index) {
+    if (!g_write_thread_running[port_index]) {
+        return;
+    }
+
+    // Signal thread to stop
+    g_write_thread_running[port_index] = false;
+
+    // Wait for thread to finish
+    pthread_join(g_write_thread[port_index], NULL);
+
+    // Destroy mutex
+    pthread_mutex_destroy(&g_write_mutex[port_index]);
+}
 
 // Get current timestamp in milliseconds
 static int get_current_time_ms(void) {
@@ -390,20 +474,30 @@ int serial_open(int port_index) {
         return -1;
     }
 
-    DBG_INFO("Serial port %s opened with settings: baud=%d, data=%d, stop=%d, parity=%d, flow=%d", 
-             config->port, config->baud_rate, config->data_bits, config->stop_bits, config->parity, config->flow_control);
-    return port_index;
-}
-
-// Read data from serial port
-int serial_read(int port_index, uint8_t *buf, int len, int timeout_ms, int byte_timeout_ms) {
-    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
-        DBG_ERROR("Invalid port index");
+    // Start write thread after successful port opening
+    if (!start_write_thread(port_index)) {
+        DBG_ERROR("Failed to start write thread for port %s", config->port);
+        close(fd);
+        config->is_open = false;
+        config->fd = -1;
+        free_write_buffer(config);
         return -1;
     }
 
-    serial_config_t *config = &g_serial_configs[port_index];
-    if (!config->is_open || config->fd < 0) {
+    DBG_INFO("Serial port %s opened with settings: baud=%d, data=%d, stop=%d, parity=%d, flow=%d", 
+             config->port, config->baud_rate, config->data_bits, config->stop_bits, config->parity, config->flow_control);
+    return config->fd;
+}
+
+// Read data from serial port
+int serial_read(int fd, uint8_t *buf, int len, int timeout_ms, int byte_timeout_ms) {
+    if (fd < 0 || !buf || len <= 0) {
+        DBG_ERROR("Invalid parameters");
+        return -1;
+    }
+
+    serial_config_t *config = find_port_by_fd(fd);
+    if (!config->is_open) {
         DBG_ERROR("Port is not open");
         return -1;
     }
@@ -415,30 +509,30 @@ int serial_read(int port_index, uint8_t *buf, int len, int timeout_ms, int byte_
     int remaining = len;
 
     while (remaining > 0) {
-    FD_ZERO(&rdset);
-        FD_SET(config->fd, &rdset);
+        FD_ZERO(&rdset);
+        FD_SET(fd, &rdset);
 
         tv.tv_sec = timeout_ms / 1000;
         tv.tv_usec = (timeout_ms % 1000) * 1000;
-        ret = select(config->fd + 1, &rdset, NULL, NULL, &tv);
-    if (ret < 0) {
-        DBG_ERROR("Select error");
-        return -1;
-    }
-    if (ret == 0) {
+        ret = select(fd + 1, &rdset, NULL, NULL, &tv);
+        if (ret < 0) {
+            DBG_ERROR("Select error");
+            return -1;
+        }
+        if (ret == 0) {
             if (total_read > 0) {
                 // If we've read some data and hit byte timeout, return what we have
                 DBG_DEBUG("Byte timeout after reading %d bytes", total_read);
                 return total_read;
             }
             DBG_WARN("No data available within timeout");
-        return 0;
-    }
+            return 0;
+        }
 
-        ret = read(config->fd, buf + total_read, remaining);
-    if (ret < 0) {
-        DBG_ERROR("Read error");
-        return -1;
+        ret = read(fd, buf + total_read, remaining);
+        if (ret < 0) {
+            DBG_ERROR("Read error");
+            return -1;
         }
         if (ret == 0) {
             // Connection closed
@@ -456,28 +550,27 @@ int serial_read(int port_index, uint8_t *buf, int len, int timeout_ms, int byte_
 }
 
 // Write data to serial port
-int serial_write(int port_index, const uint8_t *buf, int len) {
-    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
-        DBG_ERROR("Invalid port index");
-        return -1;
-    }
-
-    serial_config_t *config = &g_serial_configs[port_index];
-    if (!config->is_open || config->fd < 0) {
-        DBG_ERROR("Port is not open");
-        return -1;
-    }
-
-    if (!buf || len <= 0) {
+int serial_write(int fd, const uint8_t *buf, int len) {
+    if (fd < 0 || !buf || len <= 0) {
         DBG_ERROR("Invalid parameters");
         return -1;
     }
 
-    if (!config->write_buffer) {
-        DBG_ERROR("Write buffer not allocated");
+    // Find port index from file descriptor
+    int port_index = find_port_by_fd(fd);
+    if (port_index < 0) {
+        DBG_ERROR("Invalid file descriptor: %d", fd);
         return -1;
     }
-    
+
+    serial_config_t *config = &g_serial_configs[port_index];
+    if (!config->is_open) {
+        DBG_ERROR("Port is not open");
+        return -1;
+    }
+
+    pthread_mutex_lock(&g_write_mutex[port_index]);
+
     int total_written = 0;
     int remaining = len;
     const uint8_t *current = buf;
@@ -494,28 +587,34 @@ int serial_write(int port_index, const uint8_t *buf, int len) {
         remaining -= to_copy;
         total_written += to_copy;
 
-        // Check if buffer should be flushed
-        if (should_flush_buffer(config)) {
-            int ret = flush_write_buffer(config);
-            if (ret < 0) {
-                DBG_ERROR("Failed to flush write buffer");
-    return ret;
-            }
+        // If buffer is full, wait for write thread to flush it
+        while (config->write_buffer_pos >= config->buffer_size) {
+            pthread_mutex_unlock(&g_write_mutex[port_index]);
+            usleep(1000); // Sleep for 1ms
+            pthread_mutex_lock(&g_write_mutex[port_index]);
         }
     }
 
+    pthread_mutex_unlock(&g_write_mutex[port_index]);
     return total_written;
 }
 
 // Flush serial port buffers
-void serial_flush(int port_index) {
-    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
-        DBG_ERROR("Invalid port index");
+void serial_flush(int fd) {
+    if (fd < 0) {
+        DBG_ERROR("Invalid file descriptor");
+        return;
+    }
+
+    // Find port index from file descriptor
+    int port_index = find_port_by_fd(fd);
+    if (port_index < 0) {
+        DBG_ERROR("Invalid file descriptor: %d", fd);
         return;
     }
 
     serial_config_t *config = &g_serial_configs[port_index];
-    if (!config->is_open || config->fd < 0) {
+    if (!config->is_open) {
         DBG_ERROR("Port is not open");
         return;
     }
@@ -526,26 +625,33 @@ void serial_flush(int port_index) {
     }
 
     // Flush both input and output buffers
-    if (tcflush(config->fd, TCIOFLUSH) < 0) {
+    if (tcflush(fd, TCIOFLUSH) < 0) {
         DBG_ERROR("Failed to flush serial buffers");
     }
 }
 
 // Flush serial receive buffer only
-void serial_flush_rx(int port_index) {
-    if (port_index < 0 || port_index >= MAX_SERIAL_PORTS) {
-        DBG_ERROR("Invalid port index");
+void serial_flush_rx(int fd) {
+    if (fd < 0) {
+        DBG_ERROR("Invalid file descriptor");
+        return;
+    }
+
+    // Find port index from file descriptor
+    int port_index = find_port_by_fd(fd);
+    if (port_index < 0) {
+        DBG_ERROR("Invalid file descriptor: %d", fd);
         return;
     }
 
     serial_config_t *config = &g_serial_configs[port_index];
-    if (!config->is_open || config->fd < 0) {
+    if (!config->is_open) {
         DBG_ERROR("Port is not open");
         return;
     }
 
     // Flush only input buffer
-    if (tcflush(config->fd, TCIFLUSH) < 0) {
+    if (tcflush(fd, TCIFLUSH) < 0) {
         DBG_ERROR("Failed to flush receive buffer");
     }
 }
@@ -563,6 +669,12 @@ void serial_close(int port_index) {
         return;
     }
 
+    // Stop write thread
+    stop_write_thread(port_index);
+
+    // Lock mutex one last time to ensure thread is stopped
+    pthread_mutex_lock(&g_write_mutex[port_index]);
+
     // Flush any remaining data
     if (config->write_buffer && config->write_buffer_pos > 0) {
         flush_write_buffer(config);
@@ -574,6 +686,9 @@ void serial_close(int port_index) {
     close(config->fd);
     config->fd = -1;
     config->is_open = false;
+
+    pthread_mutex_unlock(&g_write_mutex[port_index]);
+
     DBG_INFO("Serial port %s closed", config->port);
 }
 
@@ -581,18 +696,7 @@ void serial_close(int port_index) {
 void serial_close_all(void) {
     for (int i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (g_serial_configs[i].is_open) {
-            // Flush any remaining data
-            if (g_serial_configs[i].write_buffer && g_serial_configs[i].write_buffer_pos > 0) {
-                flush_write_buffer(&g_serial_configs[i]);
-            }
-            
-            // Free write buffer
-            free_write_buffer(&g_serial_configs[i]);
-            
-            close(g_serial_configs[i].fd);
-            g_serial_configs[i].fd = -1;
-            g_serial_configs[i].is_open = false;
-            DBG_INFO("Serial port %s closed", g_serial_configs[i].port);
+            serial_close(i);
         }
     }
 }

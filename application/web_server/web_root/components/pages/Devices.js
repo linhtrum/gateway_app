@@ -368,81 +368,129 @@ function Devices() {
       }
 
       // Save device configuration
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      // const controller = new AbortController();
+      // const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch("/api/devices/set", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(devices),
-        signal: controller.signal,
-      });
+      // const response = await fetch("/api/devices/set", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify(devices),
+      //   signal: controller.signal,
+      // });
 
-      clearTimeout(timeoutId);
+      // clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        throw new Error(
-          `Failed to save device configuration: ${response.statusText}`
-        );
-      }
+      // if (!response.ok) {
+      //   throw new Error(
+      //     `Failed to save device configuration: ${response.statusText}`
+      //   );
+      // }
 
       // Save events configuration
-      const eventsController = new AbortController();
-      const eventsTimeoutId = setTimeout(() => eventsController.abort(), 10000);
+      // const eventsController = new AbortController();
+      // const eventsTimeoutId = setTimeout(() => eventsController.abort(), 10000);
 
-      const eventsResponse = await fetch("/api/event/set", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(events),
-        signal: eventsController.signal,
-      });
+      // const eventsResponse = await fetch("/api/event/set", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify(events),
+      //   signal: eventsController.signal,
+      // });
 
-      clearTimeout(eventsTimeoutId);
+      // clearTimeout(eventsTimeoutId);
 
-      if (!eventsResponse.ok) {
-        throw new Error(
-          `Failed to save events configuration: ${eventsResponse.statusText}`
-        );
-      }
+      // if (!eventsResponse.ok) {
+      //   throw new Error(
+      //     `Failed to save events configuration: ${eventsResponse.statusText}`
+      //   );
+      // }
 
       // Save report configuration
-      const reportController = new AbortController();
-      const reportTimeoutId = setTimeout(() => reportController.abort(), 10000);
+      // const reportController = new AbortController();
+      // const reportTimeoutId = setTimeout(() => reportController.abort(), 10000);
 
-      const reportResponse = await fetch("/api/report/set", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedReportConfig),
-        signal: reportController.signal,
-      });
+      // const reportResponse = await fetch("/api/report/set", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify(updatedReportConfig),
+      //   signal: reportController.signal,
+      // });
 
-      clearTimeout(reportTimeoutId);
+      // clearTimeout(reportTimeoutId);
 
-      if (!reportResponse.ok) {
-        throw new Error(
-          `Failed to save report configuration: ${reportResponse.statusText}`
-        );
-      }
+      // if (!reportResponse.ok) {
+      //   throw new Error(
+      //     `Failed to save report configuration: ${reportResponse.statusText}`
+      //   );
+      // }
 
       // Call reboot API after successful save
-      const rebootController = new AbortController();
-      const rebootTimeoutId = setTimeout(() => rebootController.abort(), 10000);
+      // const rebootController = new AbortController();
+      // const rebootTimeoutId = setTimeout(() => rebootController.abort(), 10000);
+
+      // const rebootResponse = await fetch("/api/reboot/set", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   signal: rebootController.signal,
+      // });
+
+      // clearTimeout(rebootTimeoutId);
+
+      // if (!rebootResponse.ok) {
+      //   throw new Error("Failed to reboot server");
+      // }
+
+      const [edgeResponse, deviceResponse, reportResponse, eventResponse] =
+        await Promise.all([
+          fetch("/api/edge-computing/set", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+          fetch("/api/device/set", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+          fetch("/api/report/set", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+          fetch("/api/event/set", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+        ]);
+
+      if (
+        !edgeResponse.ok ||
+        !deviceResponse.ok ||
+        !reportResponse.ok ||
+        !eventResponse.ok
+      ) {
+        throw new Error("Failed to save configuration");
+      }
 
       const rebootResponse = await fetch("/api/reboot/set", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        signal: rebootController.signal,
       });
-
-      clearTimeout(rebootTimeoutId);
 
       if (!rebootResponse.ok) {
         throw new Error("Failed to reboot server");
@@ -456,7 +504,7 @@ function Devices() {
         setSaveSuccess(false);
       }, 3000);
 
-      // Refresh page after a delay to allow server to reboot
+      // Refresh page after 5 seconds
       setTimeout(() => {
         window.location.reload();
       }, 5000);
@@ -2780,8 +2828,6 @@ function Devices() {
     `;
   };
 
-  console.log(reportConfig);
-
   const renderEdgeComputingTab = () => {
     return html`
       <div class="bg-white rounded-lg shadow-md p-6">
@@ -2804,17 +2850,15 @@ function Devices() {
             <div class="flex items-center">
               <button
                 onClick=${() =>
-                  setEdgeComputingEnabled(edgeComputingEnabled === 1 ? 0 : 1)}
+                  setEdgeComputingEnabled(edgeComputingEnabled ? false : true)}
                 class=${`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  edgeComputingEnabled === 1 ? "bg-blue-600" : "bg-gray-200"
+                  edgeComputingEnabled ? "bg-blue-600" : "bg-gray-200"
                 }`}
                 disabled=${isSaving}
               >
                 <span
                   class=${`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    edgeComputingEnabled === 1
-                      ? "translate-x-6"
-                      : "translate-x-1"
+                    edgeComputingEnabled ? "translate-x-6" : "translate-x-1"
                   }`}
                 />
               </button>
@@ -3488,6 +3532,8 @@ function Devices() {
     fetchDeviceConfig();
   }, []);
 
+  // console.log(edgeComputingEnabled);
+
   // console.table(devices);
   // console.table(events);
 
@@ -3501,17 +3547,17 @@ function Devices() {
     {
       id: "devices",
       label: "DATA ACQUISITION",
-      disabled: edgeComputingEnabled === 0,
+      disabled: edgeComputingEnabled === false,
     },
     {
       id: "report",
       label: "DATA QUERY AND REPORT",
-      disabled: edgeComputingEnabled === 0,
+      disabled: edgeComputingEnabled === false,
     },
     {
       id: "linkage-control",
       label: "LINKAGE CONTROL",
-      disabled: edgeComputingEnabled === 0,
+      disabled: edgeComputingEnabled === false,
     },
   ];
 
