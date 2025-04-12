@@ -16,6 +16,7 @@ function Logs() {
   const [inputData, setInputData] = useState("");
   const [isHexValid, setIsHexValid] = useState(true);
   const [wsPort, setWsPort] = useState(CONFIG.DEFAULT_WS_PORT);
+  const [logMethod, setLogMethod] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const logTextAreaRef = useRef(null);
@@ -39,6 +40,7 @@ function Logs() {
 
       const data = await response.json();
       setWsPort(data.wport || CONFIG.DEFAULT_WS_PORT);
+      setLogMethod(data.logMethod || 0);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -297,6 +299,7 @@ function Logs() {
             </div>
 
             ${isLoggingEnabled &&
+            logMethod > 2 &&
             html`
               <div class="space-y-4">
                 <div class="flex flex-col space-y-2">

@@ -2,358 +2,274 @@
 import { h, html, useState, useEffect, useMemo } from "../../bundle.js";
 import { Icons, Button, Card } from "../Components.js";
 
-// Add Card Modal Component
-const AddCardModal = ({
+function CardModal({
   isOpen,
   onClose,
   onSubmit,
-  newCardConfig,
-  setNewCardConfig,
-  devices,
-  displayCards,
-}) => {
-  if (!isOpen) return null;
+  card = null,
+  isEditing = false,
+  devices = [],
+}) {
+  const [formData, setFormData] = useState({
+    t: card?.t || "",
+    di: card?.di || "",
+    ti: card?.ti || "",
+    hi: card?.hi || "",
+  });
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditing && card) {
+        // Find the device index that matches the card's device name
+        const deviceIndex = devices.findIndex((device) => device.n === card.dn);
+
+        // If device is found, find the node indices for temperature and humidity
+        if (deviceIndex !== -1) {
+          const device = devices[deviceIndex];
+          const tempNodeIndex = device.ns.findIndex(
+            (node) => node.n === card.tn.n
+          );
+          const humidNodeIndex = device.ns.findIndex(
+            (node) => node.n === card.hn.n
+          );
+
+          setFormData({
+            t: card.t,
+            di: deviceIndex.toString(),
+            ti: tempNodeIndex.toString(),
+            hi: humidNodeIndex.toString(),
+          });
+        } else {
+          // If device not found, reset to empty values
+          setFormData({
+            t: card.t,
+            di: "",
+            ti: "",
+            hi: "",
+          });
+        }
+      } else {
+        // For new cards, reset to empty values
+        setFormData({
+          t: "",
+          di: "",
+          ti: "",
+          hi: "",
+        });
+      }
+    }
+  }, [isOpen, card, isEditing, devices]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    let error = null;
+
+    // Handle device selection
+    if (name === "di") {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        ti: "", // Reset temperature node selection
+        hi: "", // Reset humidity node selection
+      }));
+      return;
+    }
+
+    // Validate title
+    if (name === "t") {
+      if (!value || value.trim().length === 0) {
+        error = "Title cannot be empty";
+      } else if (value.length > 20) {
+        error = "Title must not exceed 20 characters";
+      }
+    }
+
+    if (error) {
+      alert(error);
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit();
+
+    // Validate required fields
+    if (!formData.t || !formData.di || !formData.ti || !formData.hi) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    // Validate device and node selections
+    if (!devices[parseInt(formData.di)]) {
+      alert("Please select a valid device");
+      return;
+    }
+
+    const device = devices[parseInt(formData.di)];
+    if (
+      !device.ns[parseInt(formData.ti)] ||
+      !device.ns[parseInt(formData.hi)]
+    ) {
+      alert("Please select valid temperature and humidity nodes");
+      return;
+    }
+
+    // Prepare the card data
+    const cardData = {
+      t: formData.t,
+      dn: device.n,
+      tn: {
+        n: device.ns[parseInt(formData.ti)].n,
+        a: device.ns[parseInt(formData.ti)].a,
+        f: device.ns[parseInt(formData.ti)].f,
+        dt: device.ns[parseInt(formData.ti)].dt,
+        t: device.ns[parseInt(formData.ti)].t,
+        v: device.ns[parseInt(formData.ti)].value,
+      },
+      hn: {
+        n: device.ns[parseInt(formData.hi)].n,
+        a: device.ns[parseInt(formData.hi)].a,
+        f: device.ns[parseInt(formData.hi)].f,
+        dt: device.ns[parseInt(formData.hi)].dt,
+        t: device.ns[parseInt(formData.hi)].t,
+        v: device.ns[parseInt(formData.hi)].value,
+      },
+    };
+
+    onSubmit(cardData);
   };
+
+  if (!isOpen) return null;
 
   return html`
     <div
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
     >
-      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+      <div
+        class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col"
+      >
         <div class="px-6 py-4 border-b border-gray-200">
-          <div class="flex justify-between items-center">
-            <h3 class="text-lg font-semibold">
-              Add New Display Card
-              ${displayCards.length >= 200
-                ? html`<span class="text-red-500 text-sm font-normal ml-2">
-                    (Maximum cards limit reached)
-                  </span>`
-                : html`<span class="text-gray-500 text-sm font-normal ml-2">
-                    (${200 - displayCards.length} cards remaining)
-                  </span>`}
-            </h3>
-            <button
-              onClick=${onClose}
-              class="text-gray-400 hover:text-gray-500 focus:outline-none"
-            >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+          <h3 class="text-lg font-medium text-gray-900">
+            ${isEditing ? "Edit Card" : "Add New Card"}
+          </h3>
+        </div>
+        <form onSubmit=${handleSubmit} class="flex-1 overflow-y-auto">
+          <div class="px-6 py-4 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Title<span class="text-red-500">*</span>
+                <span class="text-xs text-gray-500 ml-1">(max 20 chars)</span>
+              </label>
+              <input
+                type="text"
+                name="t"
+                value=${formData.t}
+                onChange=${handleInputChange}
+                maxlength="20"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter card title"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Device<span class="text-red-500">*</span>
+              </label>
+              <select
+                name="di"
+                value=${formData.di}
+                onChange=${handleInputChange}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+                <option value="">Select device</option>
+                ${devices.map(
+                  (device, index) => html`
+                    <option value=${index}>${device.n} (${device.da})</option>
+                  `
+                )}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Temperature Node<span class="text-red-500">*</span>
+              </label>
+              <select
+                name="ti"
+                value=${formData.ti}
+                onChange=${handleInputChange}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled=${!formData.di}
+                required
+              >
+                <option value="">Select temperature node</option>
+                ${formData.di !== "" &&
+                devices[formData.di].ns.map(
+                  (node, index) => html`
+                    <option value=${index}>
+                      ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
+                    </option>
+                  `
+                )}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Humidity Node<span class="text-red-500">*</span>
+              </label>
+              <select
+                name="hi"
+                value=${formData.hi}
+                onChange=${handleInputChange}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled=${!formData.di}
+                required
+              >
+                <option value="">Select humidity node</option>
+                ${formData.di !== "" &&
+                devices[formData.di].ns.map(
+                  (node, index) => html`
+                    <option value=${index}>
+                      ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
+                    </option>
+                  `
+                )}
+              </select>
+            </div>
+          </div>
+          <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick=${onClose}
+              class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              ${isEditing ? "Save" : "Add"}
             </button>
           </div>
-        </div>
-        <div class="px-6 py-4">
-          <form onSubmit=${handleSubmit} class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Title</label
-                >
-                <input
-                  type="text"
-                  value=${newCardConfig.t}
-                  onInput=${(e) =>
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      t: e.target.value.slice(0, 20),
-                    })}
-                  maxlength="20"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter card title (max 20 chars)"
-                  required
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Device</label
-                >
-                <select
-                  value=${newCardConfig.di}
-                  onInput=${(e) => {
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      di: e.target.value,
-                      ti: "",
-                      hi: "",
-                    });
-                  }}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select device</option>
-                  ${devices.map(
-                    (device, index) => html`
-                      <option value=${index}>${device.n} (${device.da})</option>
-                    `
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Temperature Node</label
-                >
-                <select
-                  value=${newCardConfig.ti}
-                  onInput=${(e) =>
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      ti: e.target.value,
-                    })}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!newCardConfig.di}
-                  required
-                >
-                  <option value="">Select temperature node</option>
-                  ${newCardConfig.di !== "" &&
-                  devices[newCardConfig.di].ns.map(
-                    (node, index) => html`
-                      <option value=${index}>
-                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
-                      </option>
-                    `
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Humidity Node</label
-                >
-                <select
-                  value=${newCardConfig.hi}
-                  onInput=${(e) =>
-                    setNewCardConfig({
-                      ...newCardConfig,
-                      hi: e.target.value,
-                    })}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!newCardConfig.di}
-                  required
-                >
-                  <option value="">Select humidity node</option>
-                  ${newCardConfig.di !== "" &&
-                  devices[newCardConfig.di].ns.map(
-                    (node, index) => html`
-                      <option value=${index}>
-                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
-                      </option>
-                    `
-                  )}
-                </select>
-              </div>
-            </div>
-            <div class="flex justify-end space-x-3 mt-4">
-              <button
-                type="button"
-                onClick=${onClose}
-                class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        </div>
+        </form>
       </div>
     </div>
   `;
-};
-
-// Edit Card Modal Component
-const EditCardModal = ({
-  isOpen,
-  onClose,
-  onSubmit,
-  editingCard,
-  setEditingCard,
-  devices,
-}) => {
-  if (!isOpen) return null;
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit();
-  };
-
-  return html`
-    <div
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-    >
-      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <div class="flex justify-between items-center">
-            <h3 class="text-lg font-semibold">Edit Display Card</h3>
-            <button
-              onClick=${onClose}
-              class="text-gray-400 hover:text-gray-500 focus:outline-none"
-            >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div class="px-6 py-4">
-          <form onSubmit=${handleSubmit} class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Title</label
-                >
-                <input
-                  type="text"
-                  value=${editingCard.t}
-                  onInput=${(e) =>
-                    setEditingCard({
-                      ...editingCard,
-                      t: e.target.value.slice(0, 20),
-                    })}
-                  maxlength="20"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter card title (max 20 chars)"
-                  required
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Device</label
-                >
-                <select
-                  value=${editingCard.di}
-                  onInput=${(e) => {
-                    setEditingCard({
-                      ...editingCard,
-                      di: e.target.value,
-                      ti: "",
-                      hi: "",
-                    });
-                  }}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select device</option>
-                  ${devices.map(
-                    (device, index) => html`
-                      <option value=${index}>${device.n} (${device.da})</option>
-                    `
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Temperature Node</label
-                >
-                <select
-                  value=${editingCard.ti}
-                  onInput=${(e) =>
-                    setEditingCard({
-                      ...editingCard,
-                      ti: e.target.value,
-                    })}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!editingCard.di}
-                  required
-                >
-                  <option value="">Select temperature node</option>
-                  ${editingCard.di !== "" &&
-                  devices[editingCard.di].ns.map(
-                    (node, index) => html`
-                      <option value=${index}>
-                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
-                      </option>
-                    `
-                  )}
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1"
-                  >Humidity Node</label
-                >
-                <select
-                  value=${editingCard.hi}
-                  onInput=${(e) =>
-                    setEditingCard({
-                      ...editingCard,
-                      hi: e.target.value,
-                    })}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled=${!editingCard.di}
-                  required
-                >
-                  <option value="">Select humidity node</option>
-                  ${editingCard.di !== "" &&
-                  devices[editingCard.di].ns.map(
-                    (node, index) => html`
-                      <option value=${index}>
-                        ${node.n} (${node.a}) - Current: ${node.value || "N/A"}
-                      </option>
-                    `
-                  )}
-                </select>
-              </div>
-            </div>
-            <div class="flex justify-end space-x-3 mt-4">
-              <button
-                type="button"
-                onClick=${onClose}
-                class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  `;
-};
+}
 
 function Home() {
   const [displayCards, setDisplayCards] = useState([]);
   const [devices, setDevices] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAddingCard, setIsAddingCard] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [wsStatus, setWsStatus] = useState("disconnected");
-  const [newCardConfig, setNewCardConfig] = useState({
-    t: "",
-    di: "",
-    ti: "",
-    hi: "",
-  });
 
   // Add loading and error states
   const [isLoading, setIsLoading] = useState(true);
@@ -368,7 +284,6 @@ function Home() {
 
   // Add new state for editing card
   const [editingCardIndex, setEditingCardIndex] = useState(null);
-  const [editingCard, setEditingCard] = useState(null);
 
   // WebSocket connection setup
   const connectWebSocket = () => {
@@ -445,109 +360,69 @@ function Home() {
     }
   };
 
-  // Function to fetch devices list
-  const fetchDevices = async () => {
+  const fetchConfig = async () => {
     try {
-      const response = await fetch("/api/devices/get", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      setIsLoading(true);
+      setLoadError("");
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch devices: ${response.statusText}`);
-      }
+      const [devicesResponse, cardsResponse] = await Promise.all([
+        fetch("/api/devices/get", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+        fetch("/api/home/get", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      ]);
 
-      const data = await response.json();
-      setDevices(data || []);
-    } catch (error) {
-      console.error("Error fetching devices:", error);
-      setLoadError(error.message || "Failed to load devices");
-      return false;
-    }
-    return true;
-  };
-
-  // Function to fetch card configurations
-  const fetchCardConfigs = async () => {
-    try {
-      const response = await fetch("/api/home/get", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
+      if (!devicesResponse.ok || !cardsResponse.ok) {
         throw new Error(
-          `Failed to fetch card configurations: ${response.statusText}`
+          `Failed to fetch devices or cards: ${devicesResponse.statusText} ${cardsResponse.statusText}`
         );
       }
 
-      const data = await response.json();
-      setDisplayCards(data || []);
+      const [devicesData, cardsData] = await Promise.all([
+        devicesResponse.json(),
+        cardsResponse.json(),
+      ]);
+
+      setDevices(devicesData || []);
+      setDisplayCards(cardsData || []);
     } catch (error) {
-      console.error("Error fetching card configurations:", error);
-      setLoadError(error.message || "Failed to load card configurations");
-      return false;
+      console.error("Error fetching configuration:", error);
+      setLoadError(error.message || "Failed to load configuration");
+    } finally {
+      setIsLoading(false);
     }
-    return true;
   };
 
-  // Function to save card configurations
-  const saveCardConfigs = async () => {
-    if (displayCards.length === 0) {
-      alert("No cards to save");
-      return;
-    }
-
+  const saveConfig = async () => {
     try {
       setIsSaving(true);
       setSaveError("");
       setSaveSuccess(false);
 
-      // Validate card configurations before saving
-      const invalidCards = displayCards.filter(
-        (card) => !card.t || !card.dn || !card.tn || !card.hn
-      );
+      const cardsResponse = await Promise.all([
+        fetch("/api/home/set", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(displayCards),
+        }),
+      ]);
 
-      if (invalidCards.length > 0) {
-        throw new Error("Some cards have invalid configurations");
+      if (!cardsResponse.ok) {
+        throw new Error(
+          `Failed to save configuration: ${cardsResponse.statusText}`
+        );
       }
 
-      const config = displayCards.map((card) => ({
-        t: card.t,
-        dn: card.dn,
-        tn: {
-          n: card.tn.n,
-          a: card.tn.a,
-          f: card.tn.f,
-          dt: card.tn.dt,
-          t: card.tn.t,
-        },
-        hn: {
-          n: card.hn.n,
-          a: card.hn.a,
-          f: card.hn.f,
-          dt: card.hn.dt,
-          t: card.hn.t,
-        },
-      }));
-
-      const response = await fetch("/api/home/set", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(config),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to save configuration: ${response.statusText}`);
-      }
-
-      // Call reboot API after successful save
       const rebootResponse = await fetch("/api/reboot/set", {
         method: "POST",
         headers: {
@@ -559,16 +434,13 @@ function Home() {
         throw new Error("Failed to reboot server");
       }
 
-      // Set success state and show message
       setSaveSuccess(true);
       setIsSaving(false);
 
-      // Show success message for 3 seconds
       setTimeout(() => {
         setSaveSuccess(false);
       }, 3000);
 
-      // Refresh page after 5 seconds to allow server to reboot
       setTimeout(() => {
         window.location.reload();
       }, 5000);
@@ -579,26 +451,11 @@ function Home() {
     }
   };
 
-  // Load initial data
-  const loadInitialData = async () => {
-    setIsLoading(true);
-    setLoadError("");
-
-    const devicesSuccess = await fetchDevices();
-    const cardsSuccess = await fetchCardConfigs();
-
-    if (!devicesSuccess || !cardsSuccess) {
-      setLoadError("Failed to load some data. Please try again.");
-    }
-
-    setIsLoading(false);
-  };
-
-  // Initialize WebSocket connection and cleanup on unmount
+   // Initialize WebSocket connection and cleanup on unmount
   useEffect(() => {
     document.title = "SBIOT-Dashboard";
+    fetchConfig();
     connectWebSocket();
-    loadInitialData();
 
     // Cleanup function
     return () => {
@@ -634,135 +491,42 @@ function Home() {
       alert("Maximum limit of 200 cards reached. Cannot add more cards.");
       return;
     }
-    setIsAddingCard(true);
+    setEditingCardIndex(null);
+    setIsModalOpen(true);
   };
 
-  const handleAddCard = () => {
-    // Validate required fields
-    if (
-      !newCardConfig.t ||
-      !newCardConfig.di ||
-      !newCardConfig.ti ||
-      !newCardConfig.hi
-    ) {
-      alert("Please fill in all required fields");
-      return;
-    }
-
-    // Validate device and node selections
-    if (!devices[parseInt(newCardConfig.di)]) {
-      alert("Please select a valid device");
-      return;
-    }
-
-    const device = devices[parseInt(newCardConfig.di)];
-    if (
-      !device.ns[parseInt(newCardConfig.ti)] ||
-      !device.ns[parseInt(newCardConfig.hi)]
-    ) {
-      alert("Please select valid temperature and humidity nodes");
-      return;
-    }
-
-    setDisplayCards((prev) => [
-      ...prev,
-      {
-        t: newCardConfig.t,
-        dn: device.n,
-        tn: {
-          n: device.ns[parseInt(newCardConfig.ti)].n,
-          a: device.ns[parseInt(newCardConfig.ti)].a,
-          f: device.ns[parseInt(newCardConfig.ti)].f,
-          dt: device.ns[parseInt(newCardConfig.ti)].dt,
-          t: device.ns[parseInt(newCardConfig.ti)].t,
-          v: device.ns[parseInt(newCardConfig.ti)].value,
+  const handleCardSubmit = (formData) => {
+    if (editingCardIndex !== null) {
+      // Editing existing card
+      setDisplayCards((prev) =>
+        prev.map((card, index) =>
+          index === editingCardIndex ? { ...card, ...formData } : card
+        )
+      );
+    } else {
+      // Adding new card
+      setDisplayCards((prev) => [
+        ...prev,
+        {
+          ...formData,
+          lastUpdate: new Date(),
         },
-        hn: {
-          n: device.ns[parseInt(newCardConfig.hi)].n,
-          a: device.ns[parseInt(newCardConfig.hi)].a,
-          f: device.ns[parseInt(newCardConfig.hi)].f,
-          dt: device.ns[parseInt(newCardConfig.hi)].dt,
-          t: device.ns[parseInt(newCardConfig.hi)].t,
-          v: device.ns[parseInt(newCardConfig.hi)].value,
-        },
-        lastUpdate: new Date(),
-      },
-    ]);
-    setIsAddingCard(false);
-    setNewCardConfig({
-      t: "",
-      di: "",
-      ti: "",
-      hi: "",
-    });
+      ]);
+    }
+    setIsModalOpen(false);
+    setEditingCardIndex(null);
   };
 
-  const handleCancel = () => {
-    setIsAddingCard(false);
-    setNewCardConfig({
-      t: "",
-      di: "",
-      ti: "",
-      hi: "",
-    });
+  // Add new function to handle edit card
+  const handleEditCard = (cardIndex) => {
+    setEditingCardIndex(cardIndex);
+    setIsModalOpen(true);
   };
 
   const handleDeleteCard = (cardIndex) => {
     if (confirm("Are you sure you want to delete this card?")) {
       setDisplayCards((prev) => prev.filter((_, index) => index !== cardIndex));
     }
-  };
-
-  // Add new function to handle edit card
-  const handleEditCard = (cardIndex) => {
-    const card = displayCards[cardIndex];
-    setEditingCardIndex(cardIndex);
-    setEditingCard({
-      t: card.t,
-      di: devices.findIndex((d) => d.n === card.dn),
-      ti: devices
-        .find((d) => d.n === card.dn)
-        .ns.findIndex((n) => n.n === card.tn.n),
-      hi: devices
-        .find((d) => d.n === card.dn)
-        .ns.findIndex((n) => n.n === card.hn.n),
-    });
-  };
-
-  // Add new function to handle save edit
-  const handleSaveEdit = () => {
-    if (!editingCard || editingCardIndex === null) return;
-
-    const device = devices[parseInt(editingCard.di)];
-    setDisplayCards((prev) =>
-      prev.map((card, index) =>
-        index === editingCardIndex
-          ? {
-              t: editingCard.t,
-              dn: device.n,
-              tn: {
-                n: device.ns[parseInt(editingCard.ti)].n,
-                a: device.ns[parseInt(editingCard.ti)].a,
-                f: device.ns[parseInt(editingCard.ti)].f,
-                dt: device.ns[parseInt(editingCard.ti)].dt,
-                t: device.ns[parseInt(editingCard.ti)].t,
-                v: device.ns[parseInt(editingCard.ti)].value,
-              },
-              hn: {
-                n: device.ns[parseInt(editingCard.hi)].n,
-                a: device.ns[parseInt(editingCard.hi)].a,
-                f: device.ns[parseInt(editingCard.hi)].f,
-                dt: device.ns[parseInt(editingCard.hi)].dt,
-                t: device.ns[parseInt(editingCard.hi)].t,
-                v: device.ns[parseInt(editingCard.hi)].value,
-              },
-              lastUpdate: new Date(),
-            }
-          : card
-      )
-    );
-    setEditingCardIndex(null);
-    setEditingCard(null);
   };
 
   // Memoize filtered cards to prevent unnecessary recalculations
@@ -864,7 +628,7 @@ function Home() {
         >
           <div>${loadError}</div>
           <button
-            onClick=${loadInitialData}
+            onClick=${fetchConfig}
             class="px-3 py-1 bg-red-200 hover:bg-red-300 rounded-md text-red-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             Retry
@@ -905,7 +669,7 @@ function Home() {
           </span>
           <${Button}
             onClick=${handleAddCardClick}
-            disabled=${displayCards.length >= 200 || isAddingCard}
+            disabled=${displayCards.length >= 200}
             variant="primary"
             icon="PlusIcon"
           >
@@ -948,28 +712,6 @@ function Home() {
         `}
       </div>
 
-      <${AddCardModal}
-        isOpen=${isAddingCard}
-        onClose=${handleCancel}
-        onSubmit=${handleAddCard}
-        newCardConfig=${newCardConfig}
-        setNewCardConfig=${setNewCardConfig}
-        devices=${devices}
-        displayCards=${displayCards}
-      />
-
-      <${EditCardModal}
-        isOpen=${editingCardIndex !== null}
-        onClose=${() => {
-          setEditingCardIndex(null);
-          setEditingCard(null);
-        }}
-        onSubmit=${handleSaveEdit}
-        editingCard=${editingCard}
-        setEditingCard=${setEditingCard}
-        devices=${devices}
-      />
-
       ${displayCards.length > 0 &&
       html`
         <div class="grid grid-rows-[auto] grid-cols-4 gap-4">
@@ -1003,7 +745,7 @@ function Home() {
         <${Button}
           onClick=${() => {
             if (confirm("Are you sure you want to discard all changes?")) {
-              fetchCardConfigs();
+              fetchConfig();
             }
           }}
           variant="secondary"
@@ -1013,7 +755,7 @@ function Home() {
           Cancel
         <//>
         <${Button}
-          onClick=${saveCardConfigs}
+          onClick=${saveConfig}
           disabled=${isSaving}
           loading=${isSaving}
           icon="SaveIcon"
@@ -1021,6 +763,20 @@ function Home() {
           ${isSaving ? "Saving..." : "Save Configuration"}
         <//>
       </div>
+      <!-- Card Modal -->
+      <${CardModal}
+        isOpen=${isModalOpen}
+        onClose=${() => {
+          setIsModalOpen(false);
+          setEditingCardIndex(null);
+        }}
+        onSubmit=${handleCardSubmit}
+        card=${editingCardIndex !== null
+          ? displayCards[editingCardIndex]
+          : null}
+        isEditing=${editingCardIndex !== null}
+        devices=${devices}
+      />
     </div>
   `;
 }

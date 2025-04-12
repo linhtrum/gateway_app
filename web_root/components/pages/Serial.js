@@ -10,6 +10,8 @@ import {
   FileInput,
 } from "../Components.js";
 
+import { useLanguage } from "../LanguageContext.js";
+
 // Constants and configuration
 const CONFIG = {
   BAUD_RATES: [
@@ -150,6 +152,7 @@ const validateHexInput = (input) => {
 };
 
 function Serial() {
+  const { t } = useLanguage();
   // State management
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -366,8 +369,6 @@ function Serial() {
     fetchConfigs();
   }, []);
 
-  // console.log(JSON.stringify(socketConfig));
-
   if (isLoading) {
     return html`
       <div class="p-6">
@@ -386,7 +387,7 @@ function Serial() {
 
   return html`
     <div class="p-6">
-      <h1 class="text-2xl font-bold mb-6">Serial Port Configuration</h1>
+      <h1 class="text-2xl font-bold mb-6">${t("serialConfig")}</h1>
 
       ${error &&
       html`
@@ -428,7 +429,7 @@ function Serial() {
                     ${Input({
                       type: "text",
                       name: "port",
-                      label: "Serial Port",
+                      label: `${t("serialPort")}`,
                       value: serialConfig.port,
                       onChange: (e) => handleConfigChange(e, "serial"),
                       placeholder: "Enter serial port (e.g., /dev/ttyUSB0)",
@@ -437,7 +438,7 @@ function Serial() {
                     <!-- Baud Rate -->
                     ${Select({
                       name: "baudRate",
-                      label: "Baud Rate",
+                      label: `${t("baudRate")}`,
                       value: serialConfig.baudRate,
                       onChange: (e) => handleConfigChange(e, "serial"),
                       options: CONFIG.BAUD_RATES,
@@ -445,7 +446,7 @@ function Serial() {
                     <!-- Data Bits -->
                     ${Select({
                       name: "dataBits",
-                      label: "Data Bits",
+                      label: `${t("dataBits")}`,
                       value: serialConfig.dataBits,
                       onChange: (e) => handleConfigChange(e, "serial"),
                       options: CONFIG.DATA_BITS,
@@ -453,7 +454,7 @@ function Serial() {
                     <!-- Stop Bits -->
                     ${Select({
                       name: "stopBits",
-                      label: "Stop Bits",
+                      label: `${t("stopBits")}`,
                       value: serialConfig.stopBits,
                       onChange: (e) => handleConfigChange(e, "serial"),
                       options: CONFIG.STOP_BITS,
@@ -461,7 +462,7 @@ function Serial() {
                     <!-- Parity -->
                     ${Select({
                       name: "parity",
-                      label: "Parity",
+                      label: `${t("parity")}`,
                       value: serialConfig.parity,
                       onChange: (e) => handleConfigChange(e, "serial"),
                       options: CONFIG.PARITY,
@@ -469,7 +470,7 @@ function Serial() {
                     <!-- Flow Control -->
                     ${Select({
                       name: "flowControl",
-                      label: "Flow Control",
+                      label: `${t("flowControl")}`,
                       value: serialConfig.flowControl,
                       onChange: (e) => handleConfigChange(e, "serial"),
                       options: CONFIG.FLOW_CONTROL,
@@ -478,7 +479,7 @@ function Serial() {
                     ${Input({
                       type: "number",
                       name: "timeout",
-                      label: "Serial Packet Time",
+                      label: `${t("packetTime")}`,
                       extra: "(0~255)ms",
                       value: serialConfig.timeout,
                       onChange: (e) => handleConfigChange(e, "serial"),
@@ -490,7 +491,7 @@ function Serial() {
                     ${Input({
                       type: "number",
                       name: "bufferSize",
-                      label: "Serial Packet Length",
+                      label: `${t("packetLength")}`,
                       extra: "(0~1460)bytes",
                       value: serialConfig.bufferSize,
                       onChange: (e) => handleConfigChange(e, "serial"),
@@ -505,7 +506,7 @@ function Serial() {
                     <!-- Enable/Disable -->
                     ${Checkbox({
                       name: "enabled",
-                      label_extra: "Enable Socket",
+                      label_extra: `${t("enableSocket")}`,
                       value: socketConfig.enabled,
                       onChange: (e) => handleConfigChange(e, "socket"),
                     })}
@@ -516,7 +517,7 @@ function Serial() {
                       <div class="grid grid-cols-2 gap-4">
                         ${Select({
                           name: "workingMode",
-                          label: "Working Mode",
+                          label: `${t("workingMode")}`,
                           value: socketConfig.workingMode,
                           onChange: (e) => {
                             setSocketConfig({
@@ -532,7 +533,7 @@ function Serial() {
                           <label
                             class="block text-sm font-medium text-gray-700 mb-1"
                           >
-                            Socket Mode
+                            ${t("socketMode")}
                           </label>
                           <select
                             name="sockMode"
@@ -633,7 +634,7 @@ function Serial() {
                           ${Input({
                             type: "text",
                             name: "remoteServerAddr",
-                            label: "Remote Server Address",
+                            label: `${t("remoteServerAddr")}`,
                             value: socketConfig.remoteServerAddr,
                             onChange: (e) => handleConfigChange(e, "socket"),
                             maxlength: 64,
@@ -647,7 +648,7 @@ function Serial() {
                         ${Input({
                           type: "number",
                           name: "localPort",
-                          label: "Local Port",
+                          label: `${t("localPort")}`,
                           extra: "(0~65535)",
                           value: socketConfig.localPort,
                           onChange: (e) => handleConfigChange(e, "socket"),
@@ -660,7 +661,7 @@ function Serial() {
                           ${Input({
                             type: "number",
                             name: "remotePort",
-                            label: "Remote Port",
+                            label: `${t("remotePort")}`,
                             extra: "(1~65535)",
                             value: socketConfig.remotePort,
                             onChange: (e) => handleConfigChange(e, "socket"),

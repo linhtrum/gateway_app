@@ -14,6 +14,7 @@ import Logs from "./components/pages/Logs.js";
 import IOFunction from "./components/pages/IOFunction.js";
 import Status from "./components/pages/Status.js";
 import Management from "./components/pages/Management.js";
+import { LanguageProvider } from "./components/LanguageContext.js";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -31,28 +32,30 @@ function App() {
 
   // If user is logged in, show main application
   return html`
-    <div class="flex h-screen">
-      <${Sidebar} currentRoute=${url} />
-      <div class="flex-1 flex flex-col">
-        <${Header} user=${user} onLogout=${logout} />
-        <main class="flex-1 ml-64 pt-16 p-5 bg-gray-50">
-          <${Router} onChange=${(ev) =>
+    <${LanguageProvider}>
+      <div class="flex h-screen">
+        <${Sidebar} currentRoute=${url} />
+        <div class="flex-1 flex flex-col">
+          <${Header} user=${user} onLogout=${logout} />
+          <main class="flex-1 ml-64 pt-16 p-5 bg-gray-50">
+            <${Router} onChange=${(ev) =>
     setUrl(ev.url)} history=${History.createHashHistory()}>
-            <${Home} default=${true} />
-            <${Status} path="/status" />
-            <${Network} path="/network" />
-            <${Serial} path="/serial1" />
-            <${Serial2} path="/serial2" />
-            <${MQTT} path="/mqtt" />
-            <${Devices} path="/devices" />
-            <${System} path="/system" />
-            <${Management} path="/management" />
-            <${Logs} path="/logs" />
-            <${IOFunction} path="/io-function" />
-          </${Router}>
-        </main>
+              <${Home} default=${true} />
+              <${Status} path="/status" />
+              <${Network} path="/network" />
+              <${Serial} path="/serial1" />
+              <${Serial2} path="/serial2" />
+              <${MQTT} path="/mqtt" />
+              <${Devices} path="/devices" />
+              <${System} path="/system" />
+              <${Management} path="/management" />
+              <${Logs} path="/logs" />
+              <${IOFunction} path="/io-function" />
+            </${Router}>
+          </main>
+        </div>
       </div>
-    </div>
+    </${LanguageProvider}>
   `;
 }
 

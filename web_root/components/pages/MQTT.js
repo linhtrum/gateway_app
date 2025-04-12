@@ -8,44 +8,11 @@ import {
   Checkbox,
   FileInput,
 } from "../Components.js";
-
-const CONFIG = {
-  MQTT_VERSIONS: [
-    [1, "MQTT-3.0"],
-    [2, "MQTT-3.1.1"],
-  ],
-  SSL_PROTOCOLS: [
-    [0, "Disable"],
-    [1, "TLS1.0"],
-    [2, "TLS1.2"],
-  ],
-  SSL_VERIFY_OPTIONS: [
-    [0, "None"],
-    [1, "Verify Server Certificate"],
-    [2, "Verify all"],
-  ],
-  TRANSMISSION_MODES: {
-    PUBLISH: [
-      [0, "Transparent"],
-      [1, "Distribution"],
-    ],
-    SUBSCRIBE: [
-      [0, "Without Topic"],
-      [1, "With Topic"],
-    ],
-  },
-  BINDING_PORTS: [
-    [1, "Serial 1"],
-    [2, "Serial 2"],
-  ],
-  QOS_OPTIONS: [
-    [0, "QOS0 - At most once"],
-    [1, "QOS1 - At least once"],
-    [2, "QOS2 - Exactly once"],
-  ],
-};
+import { useLanguage } from "../LanguageContext.js";
 
 function MQTT() {
+  const { t } = useLanguage();
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -57,11 +24,51 @@ function MQTT() {
 
   // Publish Configuration state
   // [...Array(8)].map((_, index) => ({ pts: `/PubTopic${index + 1}` }));
-  const [publishConfig, setPublishConfig] = useState([]);
+  const [publishConfig, setPublishConfig] = useState(
+    [...Array(8)].map((_, index) => ({ pts: `/PubTopic${index + 1}` }))
+  );
 
   // Subscribe Configuration state
   // [...Array(8)].map((_, index) => ({ sts: `/SubTopic${index + 1}` }))
-  const [subscribeConfig, setSubscribeConfig] = useState([]);
+  const [subscribeConfig, setSubscribeConfig] = useState(
+    [...Array(8)].map((_, index) => ({ pts: `/PubTopic${index + 1}` }))
+  );
+
+  const CONFIG = {
+    MQTT_VERSIONS: [
+      [1, "MQTT-3.0"],
+      [2, "MQTT-3.1.1"],
+    ],
+    SSL_PROTOCOLS: [
+      [0, t("disable")],
+      [1, "TLS1.0"],
+      [2, "TLS1.2"],
+    ],
+    SSL_VERIFY_OPTIONS: [
+      [0, t("none")],
+      [1, t("verifyServerCertificate")],
+      [2, t("verifyAll")],
+    ],
+    TRANSMISSION_MODES: {
+      PUBLISH: [
+        [0, t("transparent")],
+        [1, t("distribution")],
+      ],
+      SUBSCRIBE: [
+        [0, t("withoutTopic")],
+        [1, t("withTopic")],
+      ],
+    },
+    BINDING_PORTS: [
+      [1, t("serial1")],
+      [2, t("serial2")],
+    ],
+    QOS_OPTIONS: [
+      [0, "QOS0"],
+      [1, "QOS1"],
+      [2, "QOS2"],
+    ],
+  };
 
   const validateClientId = (id) => {
     if (!id) return "Client ID is required";
@@ -391,15 +398,15 @@ function MQTT() {
   }
 
   const tabs = [
-    { id: "config", label: "CONFIG" },
+    { id: "config", label: t("config") },
     {
       id: "publish",
-      label: "PUBLISH",
+      label: t("publish"),
       disabled: !mqttConfig.enabled,
     },
     {
       id: "subscribe",
-      label: "SUBSCRIBE",
+      label: t("subscribe"),
       disabled: !mqttConfig.enabled,
     },
   ];
@@ -460,7 +467,7 @@ function MQTT() {
                     <!-- Enable MQTT -->
                     ${Checkbox({
                       name: "enabled",
-                      label_extra: "Enable MQTT",
+                      label_extra: t("enableMqtt"),
                       value: mqttConfig.enabled,
                       onChange: (e) => handleInputChange(e, "mqtt"),
                     })}
@@ -469,7 +476,7 @@ function MQTT() {
                       <!-- MQTT Version -->
                       ${Select({
                         name: "version",
-                        label: "MQTT Version",
+                        label: t("mqttVersion"),
                         value: mqttConfig.version,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         options: CONFIG.MQTT_VERSIONS,
@@ -478,29 +485,29 @@ function MQTT() {
                       ${Input({
                         type: "text",
                         name: "clientId",
-                        label: "Client ID",
+                        label: t("clientId"),
                         value: mqttConfig.clientId,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         maxlength: 32,
-                        placeholder: "Enter client ID",
+                        placeholder: t("enterClientId"),
                         required: true,
                       })}
                       <!-- Server Address -->
                       ${Input({
                         type: "text",
                         name: "serverAddress",
-                        label: "Server Address",
+                        label: t("serverAddress"),
                         value: mqttConfig.serverAddress,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         maxlength: 64,
-                        placeholder: "Enter server address",
+                        placeholder: t("enterServerAddress"),
                         required: true,
                       })}
                       <!-- Port -->
                       ${Input({
                         type: "number",
                         name: "port",
-                        label: "Port",
+                        label: t("port"),
                         value: mqttConfig.port,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         min: 1,
@@ -512,7 +519,7 @@ function MQTT() {
                       ${Input({
                         type: "number",
                         name: "keepAlive",
-                        label: "Keep Alive",
+                        label: t("keepAlive"),
                         extra: "(0~65535) seconds",
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         value: mqttConfig.keepAlive,
@@ -524,7 +531,7 @@ function MQTT() {
                       ${Input({
                         type: "number",
                         name: "reconnectNoData",
-                        label: "Reconnecting without Data",
+                        label: t("reconnectingWithoutData"),
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         value: mqttConfig.reconnectNoData,
                         min: 0,
@@ -536,7 +543,7 @@ function MQTT() {
                       ${Input({
                         type: "number",
                         name: "reconnectInterval",
-                        label: "Reconnect Interval",
+                        label: t("reconnectInterval"),
                         onChange: (e) => handleInputChange(e, "mqtt"),
                         value: mqttConfig.reconnectInterval,
                         min: 1,
@@ -547,14 +554,14 @@ function MQTT() {
                       <!-- Clean Session -->
                       ${Checkbox({
                         name: "cleanSession",
-                        label: "Clean Session",
+                        label: t("cleanSession"),
                         value: mqttConfig.cleanSession,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                       })}
                       <!-- Use Credentials -->
                       ${Checkbox({
                         name: "useCredentials",
-                        label: "Use Credentials",
+                        label: t("useCredentials"),
                         value: mqttConfig.useCredentials,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                       })}
@@ -564,29 +571,29 @@ function MQTT() {
                         ${Input({
                           type: "text",
                           name: "username",
-                          label: "Username",
+                          label: t("username"),
                           value: mqttConfig.username,
                           onChange: (e) => handleInputChange(e, "mqtt"),
                           maxlength: 32,
-                          placeholder: "Enter username",
+                          placeholder: t("enterUsername"),
                           required: mqttConfig.useCredentials,
                         })}
                         <!-- Password -->
                         ${Input({
                           type: "password",
                           name: "password",
-                          label: "Password",
+                          label: t("password"),
                           value: mqttConfig.password,
                           onChange: (e) => handleInputChange(e, "mqtt"),
                           maxlength: 32,
-                          placeholder: "Enter password",
+                          placeholder: t("enterPassword"),
                           required: mqttConfig.useCredentials,
                         })}
                       `}
                       <!-- Enable Last Will -->
                       ${Checkbox({
                         name: "enableLastWill",
-                        label: "Enable Last Will",
+                        label: t("enableLastWill"),
                         value: mqttConfig.enableLastWill,
                         onChange: (e) => handleInputChange(e, "mqtt"),
                       })}
@@ -596,28 +603,28 @@ function MQTT() {
                         ${Input({
                           type: "text",
                           name: "lastWillTopic",
-                          label: "Topic of Will",
+                          label: t("topicOfWill"),
                           value: mqttConfig.lastWillTopic,
                           onChange: (e) => handleInputChange(e, "mqtt"),
                           maxlength: 70,
-                          placeholder: "Enter topic of will",
+                          placeholder: t("enterTopicOfWill"),
                           required: mqttConfig.enableLastWill,
                         })}
                         <!-- Will Message -->
                         ${Input({
                           type: "text",
                           name: "lastWillMessage",
-                          label: "Will Message",
+                          label: t("willMessage"),
                           value: mqttConfig.lastWillMessage,
                           onChange: (e) => handleInputChange(e, "mqtt"),
                           maxlength: 70,
-                          placeholder: "Enter will message",
+                          placeholder: t("enterWillMessage"),
                           required: mqttConfig.enableLastWill,
                         })}
                         <!-- QoS Level -->
                         ${Select({
                           name: "lastWillQos",
-                          label: "QoS Level",
+                          label: t("qosLevel"),
                           value: mqttConfig.lastWillQos || 0,
                           onChange: (e) => handleInputChange(e, "mqtt"),
                           options: CONFIG.QOS_OPTIONS,
@@ -625,44 +632,46 @@ function MQTT() {
                         <!-- Retained Message -->
                         ${Checkbox({
                           name: "lastWillRetained",
-                          label: "Retained Message",
+                          label: t("retainedMessage"),
                           value: mqttConfig.lastWillRetained,
                           onChange: (e) => handleInputChange(e, "mqtt"),
                         })}
                       `}
                       <!-- SSL Protocol Configuration -->
-                      ${Select({
-                        name: "sslProtocol",
-                        label: "SSL Protocol",
-                        value: mqttConfig.sslProtocol,
-                        onChange: (e) => {
-                          const value = parseInt(e.target.value);
-                          handleInputChange(e, "mqtt");
-                          // Reset SSL verification to None when SSL is disabled
-                          if (value === 0) {
-                            setMqttConfig((prev) => ({
-                              ...prev,
-                              sslVerify: 0,
-                            }));
-                          }
-                        },
-                        options: CONFIG.SSL_PROTOCOLS,
-                      })}
-                      <!-- SSL Verification -->
-                      ${Select({
-                        name: "sslVerify",
-                        label: "SSL Verification",
-                        value: mqttConfig.sslVerify,
-                        onChange: (e) => handleInputChange(e, "mqtt"),
-                        options: CONFIG.SSL_VERIFY_OPTIONS,
-                        disabled: mqttConfig.sslProtocol === 0,
-                      })}
+                      <div class="grid grid-cols-2 gap-4">
+                        ${Select({
+                          name: "sslProtocol",
+                          label: t("sslProtocol"),
+                          value: mqttConfig.sslProtocol,
+                          onChange: (e) => {
+                            const value = parseInt(e.target.value);
+                            handleInputChange(e, "mqtt");
+                            // Reset SSL verification to None when SSL is disabled
+                            if (value === 0) {
+                              setMqttConfig((prev) => ({
+                                ...prev,
+                                sslVerify: 0,
+                              }));
+                            }
+                          },
+                          options: CONFIG.SSL_PROTOCOLS,
+                        })}
+                        <!-- SSL Verification -->
+                        ${Select({
+                          name: "sslVerify",
+                          label: t("sslVerification"),
+                          value: mqttConfig.sslVerify,
+                          onChange: (e) => handleInputChange(e, "mqtt"),
+                          options: CONFIG.SSL_VERIFY_OPTIONS,
+                          disabled: mqttConfig.sslProtocol === 0,
+                        })}
+                      </div>
                       ${mqttConfig.sslVerify >= 1 &&
                       html`
                         <!-- Server CA Certificate -->
                         ${FileInput({
                           name: "serverCA",
-                          label: "Server CA Certificate",
+                          label: t("serverCaCertificate"),
                           value: mqttConfig.serverCA,
                           note:
                             mqttConfig.serverCA ||
@@ -677,7 +686,7 @@ function MQTT() {
                         <!-- Client CA Certificate -->
                         ${FileInput({
                           name: "clientCertificate",
-                          label: "Client CA Certificate",
+                          label: t("clientCaCertificate"),
                           value: mqttConfig.clientCertificate,
                           note:
                             mqttConfig.clientCertificate ||
@@ -689,7 +698,7 @@ function MQTT() {
                         <!-- Client Private Key -->
                         ${FileInput({
                           name: "clientPrivateKey",
-                          label: "Client Private Key",
+                          label: t("clientPrivateKey"),
                           value: mqttConfig.clientPrivateKey,
                           note:
                             mqttConfig.clientPrivateKey ||
@@ -706,9 +715,6 @@ function MQTT() {
               ? html`
                   <!-- Topics List -->
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"
-                      >Publish Topics</label
-                    >
                     <div class="space-y-4">
                       ${publishConfig.map((topic, index) => {
                         return html`
@@ -716,7 +722,7 @@ function MQTT() {
                             ${Checkbox({
                               key: `publish-topic-${index}`,
                               name: "pen",
-                              label_extra: `Publish Topic ${index + 1}`,
+                              label_extra: `${t("publishTopic")} ${index + 1}`,
 
                               value: topic.pen || false,
                               onChange: (e) =>
@@ -728,7 +734,7 @@ function MQTT() {
                               ${Select({
                                 key: `publish-topic-${index}-transmission-mode`,
                                 name: "ptm",
-                                label: "Transmission Mode",
+                                label: t("transmissionMode"),
                                 value: topic.ptm || 0,
                                 onChange: (e) =>
                                   handlePublishTopicChange(e, index),
@@ -739,12 +745,12 @@ function MQTT() {
                                 key: `publish-topic-${index}-topic-string`,
                                 type: "text",
                                 name: "pts",
-                                label: "Topic String",
+                                label: t("topicString"),
                                 value: topic.pts || "",
                                 onChange: (e) =>
                                   handlePublishTopicChange(e, index),
                                 maxlength: 70,
-                                placeholder: "Enter topic string",
+                                placeholder: t("enterTopicString"),
                                 required: true,
                               })}
                               <!-- Topic Alias (for distribution mode) -->
@@ -754,12 +760,12 @@ function MQTT() {
                                   key: `publish-topic-${index}-topic-alias`,
                                   type: "text",
                                   name: "pta",
-                                  label: "Topic Alias",
+                                  label: t("topicAlias"),
                                   value: topic.pta || "",
                                   onChange: (e) =>
                                     handlePublishTopicChange(e, index),
                                   maxlength: 70,
-                                  placeholder: "Enter topic alias",
+                                  placeholder: t("enterTopicAlias"),
                                   required: topic.ptm === 1,
                                 })}
                               `}
@@ -767,7 +773,7 @@ function MQTT() {
                               <div key=${`publish-topic-${index}-binding-port`}>
                                 <label
                                   class="block text-sm font-medium text-gray-700 mb-2"
-                                  >Binding Port</label
+                                  >${t("bindingPort")}</label
                                 >
                                 <select
                                   multiple
@@ -810,7 +816,7 @@ function MQTT() {
                               ${Select({
                                 key: `publish-topic-${index}-qos`,
                                 name: "pqos",
-                                label: "QoS Level",
+                                label: t("qosLevel"),
                                 value: topic.pqos || 0,
                                 onChange: (e) =>
                                   handlePublishTopicChange(e, index),
@@ -820,7 +826,7 @@ function MQTT() {
                               ${Checkbox({
                                 key: `publish-topic-${index}-retained-message`,
                                 name: "prm",
-                                label: "Retained Message",
+                                label: t("retainedMessage"),
                                 value: topic.prm || false,
                                 onChange: (e) =>
                                   handlePublishTopicChange(e, index),
@@ -829,7 +835,7 @@ function MQTT() {
                               ${Checkbox({
                                 key: `publish-topic-${index}-io-control-query`,
                                 name: "pio",
-                                label: "IO Control/Query",
+                                label: t("ioControlQuery"),
                                 value: topic.pio || false,
                                 onChange: (e) =>
                                   handlePublishTopicChange(e, index),
@@ -844,9 +850,6 @@ function MQTT() {
               : html`
                   <!-- Topics List -->
                   <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2"
-                      >Subscribe Topics</label
-                    >
                     <div class="space-y-4">
                       ${subscribeConfig.map((topic, index) => {
                         return html`
@@ -855,7 +858,9 @@ function MQTT() {
                             ${Checkbox({
                               key: `subscribe-topic-${index}`,
                               name: "sen",
-                              label_extra: `Subscribe Topic ${index + 1}`,
+                              label_extra: `${t("subscribeTopic")} ${
+                                index + 1
+                              }`,
                               value: topic.sen || false,
                               onChange: (e) =>
                                 handleSubscribeTopicChange(e, index),
@@ -866,7 +871,7 @@ function MQTT() {
                               ${Select({
                                 key: `subscribe-topic-${index}-transmission-mode`,
                                 name: "stm",
-                                label: "Transmission Mode",
+                                label: t("transmissionMode"),
                                 value: topic.stm || 0,
                                 onChange: (e) =>
                                   handleSubscribeTopicChange(e, index),
@@ -877,12 +882,12 @@ function MQTT() {
                                 key: `subscribe-topic-${index}-topic-string`,
                                 type: "text",
                                 name: "sts",
-                                label: "Topic String",
+                                label: t("topicString"),
                                 value: topic.sts || "",
                                 onChange: (e) =>
                                   handleSubscribeTopicChange(e, index),
                                 maxlength: 70,
-                                placeholder: "Enter topic string",
+                                placeholder: t("enterTopicString"),
                                 required: true,
                               })}
                               <!-- Delimiter -->
@@ -892,12 +897,12 @@ function MQTT() {
                                   key: `subscribe-topic-${index}-delimiter`,
                                   type: "text",
                                   name: "sd",
-                                  label: "Delimiter",
+                                  label: t("delimiter"),
                                   value: topic.sd || "",
                                   onChange: (e) =>
                                     handleSubscribeTopicChange(e, index),
                                   maxlength: 1,
-                                  placeholder: "Enter delimiter",
+                                  placeholder: t("enterDelimiter"),
                                   required: topic.stm === 1,
                                 })}
                               `}
@@ -907,7 +912,7 @@ function MQTT() {
                               >
                                 <label
                                   class="block text-sm font-medium text-gray-700 mb-2"
-                                  >Binding Port</label
+                                  >${t("bindingPort")}</label
                                 >
                                 <select
                                   multiple
@@ -950,7 +955,7 @@ function MQTT() {
                               ${Select({
                                 key: `subscribe-topic-${index}-qos`,
                                 name: "sqos",
-                                label: "QoS Level",
+                                label: t("qosLevel"),
                                 value: topic.sqos || 0,
                                 onChange: (e) =>
                                   handleSubscribeTopicChange(e, index),
@@ -960,7 +965,7 @@ function MQTT() {
                               ${Checkbox({
                                 key: `subscribe-topic-${index}-io-control-query`,
                                 name: "sio",
-                                label: "IO Control/Query",
+                                label: t("ioControlQuery"),
                                 value: topic.sio || false,
                                 onChange: (e) =>
                                   handleSubscribeTopicChange(e, index),
@@ -985,7 +990,7 @@ function MQTT() {
               icon="CloseIcon"
               disabled=${saving}
             >
-              Cancel
+              ${t("cancel")}
             <//>
             <${Button}
               onClick=${saveConfigs}
@@ -993,7 +998,7 @@ function MQTT() {
               loading=${saving}
               icon="SaveIcon"
             >
-              ${saving ? "Saving..." : "Save"}
+              ${saving ? t("saving") : t("save")}
             <//>
           </div>
         </div>

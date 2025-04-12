@@ -9,6 +9,7 @@ import Serial from "./pages/Serial.js";
 import Logs from "./pages/Logs.js";
 import Login from "./pages/Login.js";
 import Status from "./pages/Status.js";
+import { useLanguage } from "./LanguageContext.js";
 
 export const Icons = {
   // Loading spinner icon
@@ -566,99 +567,112 @@ export function Button({
   `;
 }
 
-export function Header({ user, onLogout }) {
+export const Header = ({ user, onLogout }) => {
+  const { t, language, changeLanguage } = useLanguage();
+
   return html`
-    <header class="bg-white shadow-sm fixed top-0 right-0 left-64 h-16">
-      <div class="h-full mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-full items-center">
-          <div class="flex-1"></div>
-          <div class="flex items-center space-x-4">
-            <div class="flex items-center">
-              <span class="text-gray-700 text-sm">
-                <i class="fas fa-user-circle text-xl mr-2"></i>
-                ${user}
-              </span>
-            </div>
-            <button
-              onClick=${onLogout}
-              class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+    <header class="fixed top-0 right-0 left-64 bg-white shadow-sm z-10">
+      <div class="flex items-center justify-between px-6 py-4">
+        <div class="flex items-center space-x-4">
+          <h1 class="text-xl font-semibold">${t("appName")}</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <div class="relative">
+            <select
+              value=${language}
+              onChange=${(e) => changeLanguage(e.target.value)}
+              class="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <${Icons.LogoutIcon} className="h-5 w-5 mr-2" />
-              Logout
-            </button>
+              <option value="en">${t("english")}</option>
+              <option value="vi">${t("vietnamese")}</option>
+            </select>
           </div>
+          ${user &&
+          html`
+            <div class="flex items-center space-x-4">
+              <span class="text-gray-700">${user.username}</span>
+              <button
+                onClick=${onLogout}
+                class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                <${Icons.LogoutIcon} className="h-5 w-5 mr-2" />
+                ${t("logout")}
+              </button>
+            </div>
+          `}
         </div>
       </div>
     </header>
   `;
-}
+};
 
 export function Sidebar({ currentRoute }) {
+  const { t } = useLanguage();
   const [expandedMenus, setExpandedMenus] = useState(new Set());
 
   const menuItems = [
     {
       path: "/",
-      label: "Home",
+      label: t("home"),
       icon: html`<${Icons.HomeIcon} className="w-5 h-5" />`,
     },
     {
       path: "/status",
-      label: "Status",
+      label: t("status"),
       icon: html`<${Icons.StatusIcon} className="w-5 h-5" />`,
     },
     {
       path: "/network",
-      label: "Network",
+      label: t("network"),
       icon: html`<${Icons.NetworkIcon} className="w-5 h-5" />`,
     },
     {
-      label: "Port",
+      label: t("port"),
       icon: html`<${Icons.SerialIcon} className="w-5 h-5" />`,
       children: [
         {
           path: "/serial1",
-          label: "Serial 1",
+          label: t("serial1"),
         },
         {
           path: "/serial2",
-          label: "Serial 2",
+          label: t("serial2"),
         },
         {
           path: "/logs",
-          label: "Logs",
+          label: t("logs"),
         },
       ],
     },
     {
-      label: "Gateway",
+      label: t("gateway"),
       icon: html`<${Icons.DevicesIcon} className="w-5 h-5" />`,
       children: [
         {
           path: "/mqtt",
-          label: "MQTT Gateway",
+          label: t("mqttGateway"),
         },
         {
           path: "/devices",
-          label: "Edge Computing",
+          label: t("edgeComputing"),
         },
         {
           path: "/io-function",
-          label: "IO Function",
+          label: t("ioFunction"),
         },
       ],
     },
     {
-      label: "System",
+      label: t("system"),
       icon: html`<${Icons.SettingsIcon} className="w-5 h-5" />`,
       children: [
         {
           path: "/system",
-          label: "Settings",
+          label: t("settings"),
         },
         {
           path: "/management",
-          label: "Management",
+          label: t("management"),
         },
       ],
     },

@@ -159,7 +159,7 @@ function Serial2() {
 
   // Serial configuration state
   const [serialConfig, setSerialConfig] = useState({
-    port: "/dev/ttymxc1",
+    port: "/dev/ttymxc0",
     baudRate: 115200,
     dataBits: 8,
     stopBits: 1,
@@ -365,8 +365,6 @@ function Serial2() {
     document.title = "SBIOT-Serial";
     fetchConfigs();
   }, []);
-
-  // console.log(JSON.stringify(socketConfig));
 
   if (isLoading) {
     return html`

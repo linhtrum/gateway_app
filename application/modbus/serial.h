@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 // Serial configuration structure
 typedef struct {
@@ -17,6 +18,10 @@ typedef struct {
     int buffer_size;        // "bufferSize": Buffer size for read/write operations
     int fd;                 // File descriptor for the serial port
     bool is_open;          // Port open status
+    
+    // Thread safety
+    pthread_mutex_t read_mutex;  // Mutex for read operations
+    pthread_mutex_t write_mutex; // Mutex for write operations
     
     // Buffer management
     uint8_t *write_buffer;  // Buffer for write operations

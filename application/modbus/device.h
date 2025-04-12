@@ -91,6 +91,7 @@ typedef struct node_group {
     uint16_t register_count;    // Total number of registers to read
     node_t *nodes;             // Linked list of nodes in this group
     uint16_t *data_buffer;     // Buffer to store raw data for all nodes
+    uint32_t timeout;          // Maximum timeout value of nodes in this group
     struct node_group *next;   // Next group in the list
 } node_group_t;
 

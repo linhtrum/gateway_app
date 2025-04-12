@@ -1,0 +1,173 @@
+function DeviceModal({ isOpen, onClose, onSubmit, device = null, isEditing = false, devices = [] }) {
+  const [formData, setFormData] = useState({
+    n: device?.n || "",
+    da: device?.da || 1,
+    pi: device?.pi || 1000,
+    g: device?.g || false,
+  });
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (isEditing && device) {
+        setFormData({
+          n: device.n || "",
+          da: device.da || 1,
+          pi: device.pi || 1000,
+          g: device.g || false,
+        });
+      } else {
+        // Generate unique name for new device
+        const nextName = getNextName(0, devices);
+        setFormData({
+          n: nextName || "",
+          da: 1,
+          pi: 1000,
+          g: false,
+        });
+      }
+    }
+  }, [isOpen, device, isEditing, devices]);
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+
+    // Handle checkbox inputs
+    if (type === "checkbox") {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
+
+    if (type === "select-one") {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: parseInt(value),
+      }));
+      return;
+    }
+
+    if (type === "number") {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: parseInt(value),
+      }));
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(formData);
+  };
+
+  if (!isOpen) return null;
+
+  return html`
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-medium text-gray-900">
+            ${isEditing ? "Edit Device" : "Add New Device"}
+          </h3>
+        </div>
+        <form onSubmit=${handleSubmit} class="flex-1 overflow-y-auto">
+          <div class="px-6 py-4 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Name<span class="text-red-500">*</span>
+                <span class="text-xs text-gray-500 ml-1"
+                  >(max ${CONFIG.MAX_NAME_LENGTH} chars)</span
+                >
+              </label>
+              <input
+                type="text"
+                name="n"
+                value=${formData.n}
+                onChange=${handleInputChange}
+                maxlength=${CONFIG.MAX_NAME_LENGTH}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter unique device name"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Slave Address<span class="text-red-500">*</span>
+                <span class="text-xs text-gray-500 ml-1">(1-247)</span>
+              </label>
+              <input
+                type="number"
+                name="da"
+                value=${formData.da}
+                onChange=${handleInputChange}
+                min="1"
+                max="247"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter slave address"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Polling Interval<span class="text-red-500">*</span>
+                <span class="text-xs text-gray-500 ml-1"
+                  >(${CONFIG.MIN_POLLING_INTERVAL}-${CONFIG.MAX_POLLING_INTERVAL}
+                  ms)</span
+                >
+              </label>
+              <input
+                type="number"
+                name="pi"
+                value=${formData.pi}
+                onChange=${handleInputChange}
+                min=${CONFIG.MIN_POLLING_INTERVAL}
+                max=${CONFIG.MAX_POLLING_INTERVAL}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter polling interval"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Merge Collection
+              </label>
+              <div class="flex items-center">
+                <input
+                  type="checkbox"
+                  name="g"
+                  checked=${formData.g}
+                  onChange=${handleInputChange}
+                  class="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <span class="ml-2 text-gray-700">Yes</span>
+              </div>
+            </div>
+          </div>
+          <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick=${onClose}
+              class="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              ${isEditing ? "Save Changes" : "Add Device"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}

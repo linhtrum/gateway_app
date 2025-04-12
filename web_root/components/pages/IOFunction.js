@@ -1,30 +1,10 @@
 "use strict";
 import { h, html, useState, useEffect } from "../../bundle.js";
 import { Icons, Button, Input, Select, Checkbox } from "../Components.js";
-
-const TIMING_ACTIONS = [
-  [0, "Restart"],
-  [1, "DO Action"],
-];
-
-const TIMING_DO_ACTIONS = [
-  [1, "DO1"],
-  [2, "DO2"],
-];
-
-const TIMING_ACTION_TYPES = [
-  [0, "Normal Open(NO)"],
-  [2, "Normal Close(NC)"],
-  [3, "Flip"],
-];
-
-const DO_FUNCTION_ACTIONS = [
-  [0, "No Action"],
-  [1, "Output Hold"],
-  [2, "Timer Flip"],
-];
+import { useLanguage } from "../LanguageContext.js";
 
 function IOFunction() {
+  const { t } = useLanguage();
   // State management
   const [activeTab, setActiveTab] = useState("io-control");
   const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +42,28 @@ function IOFunction() {
     executeTimeDO2: 2,
     filterTime: 10,
   });
+
+  const TIMING_ACTIONS = [
+    [0, t("restart")],
+    [1, t("doAction")],
+  ];
+
+  const TIMING_DO_ACTIONS = [
+    [1, "DO1"],
+    [2, "DO2"],
+  ];
+
+  const TIMING_ACTION_TYPES = [
+    [0, t("normalOpen")],
+    [2, t("normalClose")],
+    [3, t("flip")],
+  ];
+
+  const DO_FUNCTION_ACTIONS = [
+    [0, t("noAction")],
+    [1, t("outputHold")],
+    [2, t("timerFlip")],
+  ];
 
   // Fetch initial data
   const fetchData = async () => {
@@ -281,25 +283,25 @@ function IOFunction() {
           <nav class="-mb-px flex space-x-8">
             <button
               onClick=${() => setActiveTab("io-control")}
-              class=${`uppercase py-4 px-1 inline-flex items-center border-b-2 font-medium text-sm
+              class=${`py-4 px-1 inline-flex items-center border-b-2 font-medium text-sm
                 ${
                   activeTab === "io-control"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
             >
-              IO Control
+              ${t("ioControl")}
             </button>
             <button
               onClick=${() => setActiveTab("io-function")}
-              class=${`uppercase py-4 px-1 inline-flex items-center border-b-2 font-medium text-sm
+              class=${`py-4 px-1 inline-flex items-center border-b-2 font-medium text-sm
                 ${
                   activeTab === "io-function"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
             >
-              IO Function
+              ${t("ioFunction")}
             </button>
           </nav>
         </div>
@@ -312,7 +314,7 @@ function IOFunction() {
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- DO Status Panel -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                  <h2 class="text-lg font-semibold mb-4">DO Status</h2>
+                  <h2 class="text-lg font-semibold mb-4">${t("doStatus")}</h2>
                   <div class="space-y-4">
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">DO1</span>
@@ -354,7 +356,7 @@ function IOFunction() {
                 </div>
                 <!-- DI Status Panel -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                  <h2 class="text-lg font-semibold mb-4">DI Status</h2>
+                  <h2 class="text-lg font-semibold mb-4">${t("diStatus")}</h2>
                   <div class="space-y-4">
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">DI1</span>
@@ -365,7 +367,7 @@ function IOFunction() {
                             : "bg-red-100 text-red-800"
                         }`}
                       >
-                        ${ioStatus.di1 === 1 ? "ON" : "OFF"}
+                        ${ioStatus.di1 === 1 ? t("on") : t("off")}
                       </span>
                     </div>
                     <div class="flex items-center justify-between">
@@ -377,14 +379,14 @@ function IOFunction() {
                             : "bg-red-100 text-red-800"
                         }`}
                       >
-                        ${ioStatus.di2 === 1 ? "ON" : "OFF"}
+                        ${ioStatus.di2 === 1 ? t("on") : t("off")}
                       </span>
                     </div>
                   </div>
                 </div>
                 <!-- AI Status Panel -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                  <h2 class="text-lg font-semibold mb-4">AI Status</h2>
+                  <h2 class="text-lg font-semibold mb-4">${t("aiStatus")}</h2>
                   <div class="space-y-4">
                     <div class="flex items-center justify-between">
                       <span class="text-gray-700">AI1</span>
@@ -413,7 +415,7 @@ function IOFunction() {
                     type: "number",
                     name: "slaveAddress",
                     extra: "(1~255)",
-                    label: "Slave Address",
+                    label: t("slaveAddress"),
                     value: ioConfig.slaveAddress,
                     onChange: (e) =>
                       setIoConfig((prev) => ({
@@ -426,7 +428,9 @@ function IOFunction() {
                 </div>
                 <!-- Timing Function Section -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                  <h2 class="text-lg font-semibold mb-4">Timing Function</h2>
+                  <h2 class="text-lg font-semibold mb-4">
+                    ${t("timingFunction")}
+                  </h2>
                   <div class="space-y-4">
                     ${ioConfig.timers.map(
                       (timer, index) => html`
@@ -441,7 +445,7 @@ function IOFunction() {
                             ${Checkbox({
                               key: `timer-${index}-enabled`,
                               name: "enabled",
-                              label: "Enable",
+                              label: t("enable"),
                               value: timer.enabled,
                               onChange: (e) =>
                                 handleTimerChange(
@@ -458,7 +462,7 @@ function IOFunction() {
                                 key: `timer-${index}-time`,
                                 type: "time",
                                 name: "time",
-                                label: "Timing Time",
+                                label: t("timingTime"),
                                 value: timer.time,
                                 onChange: (e) =>
                                   handleTimerChange(
@@ -470,7 +474,7 @@ function IOFunction() {
                               ${Select({
                                 key: `timer-${index}-action`,
                                 name: "action",
-                                label: "Timing Action",
+                                label: t("timingAction"),
                                 value: timer.action,
                                 onChange: (e) =>
                                   handleTimerChange(
@@ -487,7 +491,7 @@ function IOFunction() {
                                 ${Select({
                                   key: `timer-${index}-doAction`,
                                   name: "doAction",
-                                  label: "DO Action",
+                                  label: t("doAction"),
                                   value: timer.doAction,
                                   onChange: (e) =>
                                     handleTimerChange(
@@ -500,7 +504,7 @@ function IOFunction() {
                                 ${Select({
                                   key: `timer-${index}-doActionType`,
                                   name: "doActionType",
-                                  label: "Action Type",
+                                  label: t("actionType"),
                                   value: timer.doActionType,
                                   onChange: (e) =>
                                     handleTimerChange(
@@ -520,11 +524,11 @@ function IOFunction() {
                 </div>
                 <!-- DO Function Section -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                  <h2 class="text-lg font-semibold mb-4">DO Function</h2>
+                  <h2 class="text-lg font-semibold mb-4">${t("doFunction")}</h2>
                   <div class="space-y-4">
                     ${Checkbox({
                       name: "restartHold",
-                      label: "Enable Restart Hold",
+                      label: t("enableRestartHold"),
                       value: ioConfig.restartHold,
                       onChange: (e) =>
                         setIoConfig((prev) => ({
@@ -535,7 +539,7 @@ function IOFunction() {
 
                     <div class="mt-4">
                       <h3 class="text-sm font-medium text-gray-700 mb-2">
-                        DO Action Config
+                        ${t("doActionConfig")}
                       </h3>
                       <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
@@ -543,17 +547,17 @@ function IOFunction() {
                             <th
                               class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase"
                             >
-                              Execute IO
+                              ${t("executeIO")}
                             </th>
                             <th
                               class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase"
                             >
-                              Execute Action
+                              ${t("executeAction")}
                             </th>
                             <th
                               class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase"
                             >
-                              Execute Time
+                              ${t("executeTime")}
                               <span class="text-xs"> (1~65535s)</span>
                             </th>
                           </tr>
@@ -624,11 +628,11 @@ function IOFunction() {
                 </div>
                 <!-- DI Function Section -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                  <h2 class="text-lg font-semibold mb-4">DI Function</h2>
+                  <h2 class="text-lg font-semibold mb-4">${t("diFunction")}</h2>
                   ${Input({
                     type: "number",
                     name: "filterTime",
-                    label: "Filter Time",
+                    label: t("filterTime"),
                     extra: "(10~65535)ms",
                     value: ioConfig.filterTime,
                     onChange: (e) =>
@@ -654,7 +658,7 @@ function IOFunction() {
                     icon="CloseIcon"
                     disabled=${isSaving}
                   >
-                    Cancel
+                    ${t("cancel")}
                   <//>
                   <${Button}
                     onClick=${saveConfig}
@@ -662,7 +666,7 @@ function IOFunction() {
                     loading=${isSaving}
                     icon="SaveIcon"
                   >
-                    ${isSaving ? "Saving..." : "Save"}
+                    ${isSaving ? t("saving") : t("save")}
                   <//>
                 </div>
               </div>

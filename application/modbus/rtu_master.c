@@ -22,6 +22,7 @@
 
 #define DEFAULT_PORT "/dev/ttymxc1"
 #define DEFAULT_BAUD 115200
+#define DEFAULT_MODBUS_BYTE_TIMEOUT 10
 
 static int method_ws_log = 0; 
 
@@ -167,7 +168,7 @@ static int rtu_master_receive(device_t *device, uint8_t *buf, int len, int timeo
     }
     else
     {
-        // read_len = -1;
+        read_len = -1;
     }
     return read_len;
 }
@@ -622,7 +623,7 @@ static int poll_group_node(agile_modbus_t *ctx, device_t *device, node_group_t *
     }
 
     // Read response
-    int read_len = rtu_master_receive(device, ctx->read_buf, ctx->read_bufsz, MODBUS_RTU_TIMEOUT, 10);
+    int read_len = rtu_master_receive(device, ctx->read_buf, ctx->read_bufsz, group->timeout, DEFAULT_MODBUS_BYTE_TIMEOUT);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
                  group->function, group->start_address);
@@ -855,6 +856,8 @@ void rtu_master_poll(agile_modbus_t *ctx, device_t *current_device) {
     }
 }
 
+
+
 // Process virtual registers (port 4) - calculate formula values without polling
 static void process_virtual_registers(device_t *device) {
     if (!device) {
@@ -1064,26 +1067,25 @@ static void *rtu_master_thread(void *arg) {
                     ctx = &ctx_rtu._ctx;
                 }
 
-                if(current_device->fd < 0) {
-                    serial_config_t *serial = serial_get_config(current_device->port);
-                    if (!serial) {
-                        DBG_ERROR("Failed to get serial configuration for port %d", current_device->port);
-                        current_device = current_device->next;
-                        continue;
-                    }
+                serial_config_t *serial = serial_get_config(current_device->port);
+                if(!serial)
+                {
+                    DBG_ERROR("Failed to get serial configuration for port %d", current_device->port);
+                    current_device = current_device->next;
+                    continue;
+                }
 
-                    if (!serial->is_open) {
-                        serial_open(current_device->port);
-                    }
-                    
-                    if (serial->fd < 0) {
+                if(!serial->is_open)
+                {
+                    current_device->fd= serial_open(current_device->port);
+                    if(current_device->fd < 0)
+                    {
                         DBG_ERROR("Failed to open serial port %d", current_device->port);
                         current_device = current_device->next;
                         continue;
                     }
-
-                    current_device->fd = serial->fd;
                 }
+                current_device->fd = serial->fd;
                 rtu_master_poll(ctx, current_device);
             } else if (current_device->port == PORT_ETHERNET) {
                 // TCP mode for port 2

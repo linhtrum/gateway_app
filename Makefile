@@ -15,8 +15,9 @@ INCLUDE = -I./packages/mongoose \
 		-I./application/event \
 		-I./application/network \
 		-I./application/mqtt \
+		-I./lib/include
 
-LIB = -lpthread -lrt -lpaho-mqtt3a -lm
+LIB = -lpthread -lrt -lm -L./lib -lpaho-mqtt3a -Wl,-rpath=./lib
 
 TARGET = app
 
@@ -59,7 +60,7 @@ all: $(TARGET)
 	./out/$(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) out/*.o -o $(TARGET) $(LIB) 
+	$(CC) out/*.o -o $(TARGET) $(LIB)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDE)

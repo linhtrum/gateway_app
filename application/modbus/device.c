@@ -213,6 +213,7 @@ static void create_node_groups(device_t *device) {
             new_group->function = current->function;
             new_group->start_address = current->address;
             new_group->nodes = current;
+            new_group->timeout = current->timeout; // Initialize with first node's timeout
             
             // Add to groups list
             if (!groups) {
@@ -230,6 +231,11 @@ static void create_node_groups(device_t *device) {
         uint16_t end_address = current->address + get_register_count(current->data_type);
         if (end_address - current_group->start_address > current_group->register_count) {
             current_group->register_count = end_address - current_group->start_address;
+        }
+        
+        // Update group's timeout if current node has a larger timeout
+        if (current->timeout > current_group->timeout) {
+            current_group->timeout = current->timeout;
         }
         
         current = current->next;
@@ -286,8 +292,8 @@ device_t* load_device_config(void) {
         cJSON *nodes = cJSON_GetObjectItem(device_obj, "ns");
         cJSON *port = cJSON_GetObjectItem(device_obj, "p");
         cJSON *protocol = cJSON_GetObjectItem(device_obj, "pr");
-        cJSON *server_addr = cJSON_GetObjectItem(device_obj, "sa");
         cJSON *server_port = cJSON_GetObjectItem(device_obj, "sp");
+        cJSON *server_addr = cJSON_GetObjectItem(device_obj, "sa");
         cJSON *enable_map = cJSON_GetObjectItem(device_obj, "em");
         cJSON *mapped_addr = cJSON_GetObjectItem(device_obj, "ma");
 
@@ -309,6 +315,8 @@ device_t* load_device_config(void) {
         }
         if (port) {
             new_device->port = (port_type_t)port->valueint;
+        } else {
+            new_device->port = PORT_SERIAL_1;
         }
         if (protocol) {
             new_device->protocol = (protocol_t)protocol->valueint;
