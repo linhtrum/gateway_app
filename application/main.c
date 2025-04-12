@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
     log_output_start();
 
     // Apply network config
-    apply_network_config();
+    // apply_network_config();
 
     if(get_log_method() == 2) {
         log_output_init(LOG_OUTPUT_WEBSOCKET);
@@ -54,10 +54,10 @@ int main(int argc, char *argv[]) {
     websocket_log_start();
 
     // Initialize UDP server
-    start_udp_server();
+    // start_udp_server();
 
     // Initialize modbus master
-    start_rtu_master();
+    // start_rtu_master();
 
     DBG_INFO("Application started");
 

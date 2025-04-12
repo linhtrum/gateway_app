@@ -8,9 +8,10 @@
 #include "serial.h"
 #include "cJSON.h"
 #include "db.h"
-#include "../web_server/net.h"
-#include "../web_server/websocket.h"
-#include "../log/log_output.h"
+#include "net.h"
+#include "websocket.h"
+#include "log_output.h"
+#include "serial_config.h"
 
 #define DBG_TAG "RTU_MASTER"
 #define DBG_LVL LOG_INFO
@@ -384,7 +385,7 @@ static int poll_single_node(agile_modbus_t *ctx, int fd, device_t *device, node_
     }
 
     // Read response with node-specific timeout
-    int read_len = serial_receive(fd, ctx->read_buf, ctx->read_bufsz, node->timeout);
+    int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, node->timeout, 10);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for node %s (timeout: %dms)", 
                  node->name, node->timeout);
@@ -514,8 +515,8 @@ static int poll_group_node(agile_modbus_t *ctx, int fd, device_t *device, node_g
     }
 
     // Read response
-    int read_len = serial_receive(fd, ctx->read_buf, ctx->read_bufsz, 
-                             MODBUS_RTU_TIMEOUT);
+    int read_len = serial_read(fd, ctx->read_buf, ctx->read_bufsz, 
+                             MODBUS_RTU_TIMEOUT, 10);
     if (read_len < 0) {
         DBG_ERROR("Failed to read response for group (function: %d, start: %d)", 
                  group->function, group->start_address);
@@ -799,23 +800,6 @@ void free_device_config(device_t *config) {
     }
 }
 
-// Initialize Modbus RTU master with improved error handling
-int rtu_master_init(const char *port, int baud) {
-    if (!port) {
-        DBG_ERROR("Invalid port parameter");
-        return RTU_MASTER_INVALID;
-    }
-
-    int fd = serial_open(port, baud);
-    if (fd < 0) {
-        DBG_ERROR("Failed to open serial port %s at %d baud", port, baud);
-        return RTU_MASTER_ERROR;
-    }
-       
-    DBG_INFO("Modbus RTU master initialized on %s at %d baud", port, baud);
-    return fd;
-}
-
 void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
     if (!config || fd < 0 || !ctx) {
         DBG_ERROR("Invalid parameters for polling");
@@ -864,7 +848,7 @@ void rtu_master_poll(agile_modbus_t *ctx, int fd, device_t *config) {
 }
 
 static void *rtu_master_thread(void *arg) {
-    int fd;
+    int fd = -1;
     uint8_t master_send_buf[MODBUS_MAX_ADU_LENGTH];
     uint8_t master_recv_buf[MODBUS_MAX_ADU_LENGTH];
 
@@ -881,7 +865,8 @@ static void *rtu_master_thread(void *arg) {
     }
 
     // Initialize serial port
-    fd = rtu_master_init(DEFAULT_PORT, DEFAULT_BAUD);
+    serial_config_t *serial_config = serial_config_get();
+    fd = serial_open(serial_config->port, serial_config->baudRate, serial_config->dataBits, serial_config->parity, serial_config->stopBits, serial_config->flowControl);
     if (fd < 0) {
         DBG_ERROR("Failed to initialize RTU master");
         goto exit;
@@ -900,6 +885,10 @@ static void *rtu_master_thread(void *arg) {
     exit:
     if(config) {
         free_device_config(config);
+    }
+
+    if(serial_config) {
+        free(serial_config);
     }
 
     if(fd >= 0) {

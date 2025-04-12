@@ -13,8 +13,8 @@
 #include <linux/route.h>
 #include <resolv.h>
 #include "db.h"
-#include "../log/log_buffer.h"
-#include "../log/log_output.h"
+#include "log_buffer.h"
+#include "log_output.h"
 
 #define DEFAULT_HTTP_PORT 8000
 #define DEFAULT_HTTP_URL "http://0.0.0.0"
@@ -947,10 +947,7 @@ static void fn(struct mg_connection *c, int ev, void *ev_data) {
             handle_factory_reset_set(c, hm);
         }
         else {
-            struct mg_http_serve_opts opts;
-            memset(&opts, 0, sizeof(opts));
-            opts.root_dir = "/web_root";
-            opts.fs = &mg_fs_packed;
+            struct mg_http_serve_opts opts = {.root_dir = "web_root"};
             mg_http_serve_dir(c, ev_data, &opts);
         }
     }

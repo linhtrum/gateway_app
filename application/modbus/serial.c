@@ -1,4 +1,5 @@
 #include "serial.h"
+#include "serial_config.h"
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -11,10 +12,10 @@
 #define DBG_LVL LOG_INFO
 #include "dbg.h"
 
-int serial_open(const char *port, int baud) {
+int serial_open(const char *port, int baud, int data_bits, int parity, int stop_bits, int flow_control) {
     struct termios tty;
     int fd;
-
+    
     // Open serial port
     fd = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0) {
@@ -42,18 +43,70 @@ int serial_open(const char *port, int baud) {
             close(fd);
             return -1;
     }
+
     cfsetispeed(&tty, speed);
     cfsetospeed(&tty, speed);
 
-    // 8N1 (8 bits, no parity, 1 stop bit)
-    tty.c_cflag &= ~PARENB;  // No parity
-    tty.c_cflag &= ~CSTOPB;  // 1 stop bit
-    tty.c_cflag &= ~CSIZE;   // Clear size bits
-    tty.c_cflag |= CS8;      // 8 bits
-    
-    // No flow control
-    tty.c_cflag &= ~CRTSCTS;
+    // Set data bits
+    tty.c_cflag &= ~CSIZE;
+    switch (data_bits) {
+        case 7: tty.c_cflag |= CS7; break;
+        case 8: tty.c_cflag |= CS8; break;
+        default:
+            DBG_ERROR("Unsupported data bits: %d", data_bits);
+            close(fd);
+            return -1;
+    }
 
+    // Set stop bits
+    switch (stop_bits) {
+        case 1: tty.c_cflag &= ~CSTOPB; break;
+        case 2: tty.c_cflag |= CSTOPB; break;
+        default:
+            DBG_ERROR("Unsupported stop bits: %d", stop_bits);
+            close(fd);
+            return -1;
+    }
+
+    // Set parity
+    switch (parity) {
+        case 0: // None
+            tty.c_cflag &= ~PARENB;
+            break;
+        case 1: // Odd
+            tty.c_cflag |= PARENB;
+            tty.c_cflag |= PARODD;
+            break;
+        case 2: // Even 
+            tty.c_cflag |= PARENB;
+            tty.c_cflag &= ~PARODD;
+            break;
+        default:
+            DBG_ERROR("Unsupported parity: %d", parity);
+            close(fd);
+            return -1;
+    }
+
+    // Set flow control
+    switch (flow_control) {
+        case 0: // None
+            tty.c_cflag &= ~CRTSCTS;
+            tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+            break;
+        case 1: // RTS/CTS
+            tty.c_cflag |= CRTSCTS;
+            tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+            break;
+        case 2: // XON/XOFF
+            tty.c_cflag &= ~CRTSCTS;
+            tty.c_iflag |= (IXON | IXOFF | IXANY);
+            break;
+        default:    
+            DBG_ERROR("Unsupported flow control: %d", flow_control);
+            close(fd);
+            return -1;
+    }
+    
     // Enable receiver, ignore modem control lines
     tty.c_cflag |= CREAD | CLOCAL;
 
@@ -64,8 +117,8 @@ int serial_open(const char *port, int baud) {
 
     // Set read timeout
     tty.c_cc[VMIN] = 0;      // No minimum characters
-    tty.c_cc[VTIME] = 0;    // 10 second timeout
-
+    tty.c_cc[VTIME] = 0;     // No timeout
+    
     // Apply settings
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
         DBG_ERROR("Failed to set port settings");
@@ -73,84 +126,61 @@ int serial_open(const char *port, int baud) {
         return -1;
     }
 
-    DBG_INFO("Serial port %s opened successfully", port);
+    DBG_INFO("Serial port %s opened successfully with configuration: baud=%d, data_bits=%d, parity=%d, stop_bits=%d, flow_control=%d", port, baud, data_bits, parity, stop_bits, flow_control);
     return fd;
 }
 
-int serial_receive(int fd, uint8_t *buf, int bufsz, int timeout)
-{
-    int len = 0;
-    int rc = 0;
-    fd_set rset;
-    struct timeval tv;
-
-    while (bufsz > 0) {
-        FD_ZERO(&rset);
-        FD_SET(fd, &rset);
-
-        tv.tv_sec = timeout / 1000;
-        tv.tv_usec = (timeout % 1000) * 1000;
-        rc = select(fd + 1, &rset, NULL, NULL, &tv);
-        if (rc == -1) {
-            if (errno == EINTR)
-                continue;
-        }
-
-        if (rc <= 0) {
-            break;
-        }
-
-        rc = read(fd, buf + len, bufsz);
-        if (rc <= 0) {
-            break;
-        }
-        len += rc;
-        bufsz -= rc;
-
-        timeout = 20;
-    }
-
-    if (rc >= 0) {
-        rc = len;
-    }
-
-    return rc;
-}
-
 // Read data from serial port
-int serial_read(int fd, uint8_t *buf, int len, int timeout_ms) {
-    if (fd < 0) {
-        DBG_ERROR("Invalid file descriptor");
+int serial_read(int fd, uint8_t *buf, int len, int timeout_ms, int bytes_timeout) {
+    if (fd < 0 || buf == NULL || len <= 0) {
+        DBG_ERROR("Invalid parameters");
         return -1;
     }
 
     fd_set rdset;
     struct timeval timeout;
     int ret;
+    int total_read = 0;
+    int remaining = len;
 
-    FD_ZERO(&rdset);
-    FD_SET(fd, &rdset);
+    while (remaining > 0) {
+        FD_ZERO(&rdset);
+        FD_SET(fd, &rdset);
 
-    timeout.tv_sec = timeout_ms / 1000;
-    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+        timeout.tv_sec = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
 
-    ret = select(fd + 1, &rdset, NULL, NULL, &timeout);
-    if (ret < 0) {
-        DBG_ERROR("Select error");
-        return -1;
+        ret = select(fd + 1, &rdset, NULL, NULL, &timeout);
+        if (ret < 0) {
+            DBG_ERROR("Select error");
+            return -1;
+        }
+        if (ret == 0) {
+            if(total_read > 0) {
+                DBG_WARN("Read timeout, total_read=%d", total_read);
+                return total_read;
+            }
+            DBG_WARN("Read timeout");
+            return 0;
+        }
+
+        ret = read(fd, buf + total_read, remaining);
+        if (ret < 0) {
+            DBG_ERROR("Read error");
+            return -1;
+        }
+        if (ret == 0) {
+            DBG_WARN("Read timeout");
+            return total_read;
+        }
+
+        total_read += ret;
+        remaining -= ret;
+
+        // Reset timeout to bytes_timeout        
+        timeout_ms = bytes_timeout;
     }
-    if (ret == 0) {
-        DBG_WARN("Read timeout");
-        return 0;
-    }
-
-    ret = read(fd, buf, len);
-    if (ret < 0) {
-        DBG_ERROR("Read error");
-        return -1;
-    }
-
-    return ret;
+    return total_read;
 }
 
 // Write data to serial port
